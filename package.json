@@ -1,0 +1,17 @@
+{
+  "name": "budgetpascal-wasm",
+  "version": "1.0.0",
+  "repository": "git@github.com:faizilham/budgetpascal-wasm.git",
+  "author": "Faiz Ilham <faizilham.faizz@gmail.com>",
+  "license": "MIT",
+  "scripts": {
+    "start": "node dist/index.js",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^4.4.4"
+  },
+  "dependencies": {
+    "binaryen": "^102.0.0"
+  }
+}
