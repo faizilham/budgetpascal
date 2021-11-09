@@ -89,6 +89,7 @@ const KeywordTokens : {[key: string]: TokenType} = {
   "not": TokenType.NOT,
   "of": TokenType.OF,
   "or": TokenType.OR,
+  "pow": TokenType.POW,
   "procedure": TokenType.PROCEDURE,
   "program": TokenType.PROGRAM,
   "record": TokenType.RECORD,
@@ -383,6 +384,7 @@ export class Scanner {
       this.eof = new Token(TokenType.EOF, "", this.line);
     }
 
+    this.eof.line = this.line;
     return this.eof;
   }
 
@@ -473,7 +475,7 @@ export class Scanner {
   }
 
   private reportError(message: string) {
-    this.lastError = `line ${this.line}: ${message}`;
+    this.lastError = message;
   }
 }
 

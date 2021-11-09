@@ -2,6 +2,7 @@ PLUS + 1
 MINUS - 1
 MULTIPLY * 1
 POW ** 1
+POW pow 1
 SLASH / 1
 DIV div 1
 MOD mod 1
@@ -67,7 +68,7 @@ CONTINUE continue 35
 CASE case 35
 CONST const 36
 DO do 36
-DOWNTO downto 36
+DOWNTO downTo 36
 ELSE else 36
 END end 36
 ENDFILE end 36

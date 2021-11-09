@@ -1,4 +1,4 @@
-+ - * ** / div mod
++ - * ** pow / div mod
 
 and or xor not shl shr << >>
 
@@ -33,6 +33,6 @@ true false
 ''''
 
 array begin break continue case
-const do downto else end end. for
+const do downTo else end end. for
 function forward if of procedure program
 record repeat then to type until var while
