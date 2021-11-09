@@ -1,4 +1,5 @@
 import binaryen from "binaryen";
+import { Scanner } from "./scanner";
 
 export function compile() : WebAssembly.Module {
   const mod = new binaryen.Module();

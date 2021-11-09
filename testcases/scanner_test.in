@@ -1,0 +1,38 @@
++ - * ** / div mod
+
+and or xor not shl shr << >>
+
+= > < >= <= <> in
+
+:= += -= *= /=
+() [] ., .. : ;
+@ ^
+
+// numbers
+{ comments
+  are
+  ignored
+}
+
+(*
+  this too
+  } { // also ignored
+*)
+
+a b2 _test test_var1_name
+integer real char string
+
+true false
+
+124 24.53 3e-2   2.5e+3+
+24. 32e
+
+# #120 #255 #256
+
+'string' '{with apostrophe "''" '''' }'
+''''
+
+array begin break continue case
+const do downto else end end. for
+function forward if of procedure program
+record repeat then to type until var while

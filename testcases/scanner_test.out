@@ -1,0 +1,88 @@
+PLUS + 1
+MINUS - 1
+MULTIPLY * 1
+POW ** 1
+SLASH / 1
+DIV div 1
+MOD mod 1
+AND and 3
+OR or 3
+XOR xor 3
+NOT not 3
+SHL shl 3
+SHR shr 3
+SHL << 3
+SHR >> 3
+EQUAL = 5
+GREATER > 5
+LESS < 5
+GREATER_EQ >= 5
+LESS_EQ <= 5
+NOT_EQ <> 5
+IN in 5
+ASSIGN := 7
+ASSIGN_PLUS += 7
+ASSIGN_MIN -= 7
+ASSIGN_MUL *= 7
+ASSIGN_SLASH /= 7
+LEFT_PAREN ( 8
+RIGHT_PAREN ) 8
+LEFT_SQUARE [ 8
+RIGHT_SQUARE ] 8
+DOT . 8
+COMMA , 8
+RANGE .. 8
+COLON : 8
+SEMICOLON ; 8
+UNKNOWN @ 9
+UNKNOWN ^ 9
+IDENTIFIER a 22
+IDENTIFIER b2 22
+IDENTIFIER _test 22
+IDENTIFIER test_var1_name 22
+IDENTIFIER integer 23
+IDENTIFIER real 23
+IDENTIFIER char 23
+IDENTIFIER string 23
+TRUE true 25 true
+FALSE false 25 false
+INTEGER 124 27 124
+REAL 24.53 27 24.53
+REAL 3e-2 27 0.03
+REAL 2.5e+3 27 2500
+PLUS + 27
+UNKNOWN 24. 28
+UNKNOWN 32e 28
+UNKNOWN # 30
+CHAR #120 30 120
+CHAR #255 30 255
+UNKNOWN #256 30
+STRING 'string' 32 string
+STRING '{with apostrophe "''" '''' }' 32 {with apostrophe "'" '' }
+STRING '''' 33 '
+ARRAY array 35
+BEGIN begin 35
+BREAK break 35
+CONTINUE continue 35
+CASE case 35
+CONST const 36
+DO do 36
+DOWNTO downto 36
+ELSE else 36
+END end 36
+ENDFILE end 36
+FOR for 36
+FUNCTION function 37
+FORWARD forward 37
+IF if 37
+OF of 37
+PROCEDURE procedure 37
+PROGRAM program 37
+RECORD record 38
+REPEAT repeat 38
+THEN then 38
+TO to 38
+TYPE type 38
+UNTIL until 38
+VAR var 38
+WHILE while 38
