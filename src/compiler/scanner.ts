@@ -110,6 +110,7 @@ export class Scanner {
   start: number = 0;
   line: number = 1;
   eof: Token | null = null;
+  lastError: string = "";
 
   constructor(public text: string){
     this.reset();
@@ -120,6 +121,7 @@ export class Scanner {
     this.start = 0;
     this.current = 0;
     this.eof = null;
+    this.lastError = "";
   }
 
   scanToken(): Token {
@@ -222,7 +224,9 @@ export class Scanner {
         }
       }
 
-      return this.makeToken(TokenType.UNKNOWN);
+      const token = this.makeToken(TokenType.UNKNOWN);
+      this.reportError(`Unknown symbol ${token.lexeme}`);
+      return token;
     }
 
   }
@@ -250,6 +254,7 @@ export class Scanner {
 
       if (this.current === lastIndex) {
         // no number after '.', illegal token
+        this.reportError("Invalid number format, expected digits after '.'");
         return this.makeToken(TokenType.UNKNOWN);
       }
     }
@@ -269,6 +274,7 @@ export class Scanner {
 
       if (this.current === lastIndex) {
         // no number after (e|E)[+-]? , illegal token
+        this.reportError("Invalid number format, expected digits after exponent sign");
         return this.makeToken(TokenType.UNKNOWN);
       }
     }
@@ -294,6 +300,7 @@ export class Scanner {
 
     if (lastIndex === this.current) {
       // no number after #, illegal token
+      this.reportError("Invalid char format, expected digits after '#'");
       return this.makeToken(TokenType.UNKNOWN);
     }
 
@@ -301,6 +308,7 @@ export class Scanner {
     const charVal = parseInt(token.lexeme.substring(1), 10);
 
     if (charVal > 255) {
+      this.reportError("Char code is larger than 255'");
       return this.makeToken(TokenType.UNKNOWN);
     }
 
@@ -360,6 +368,7 @@ export class Scanner {
 
     if (!finished) {
       // no matching ' found, illegal
+      this.reportError("Wrong number of matching quote");
       return this.makeToken(TokenType.UNKNOWN);
     }
 
@@ -461,6 +470,10 @@ export class Scanner {
     }
 
     return this.text[this.current+1];
+  }
+
+  private reportError(message: string) {
+    this.lastError = `line ${this.line}: ${message}`;
   }
 }
 
