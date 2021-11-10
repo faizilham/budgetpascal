@@ -13,6 +13,8 @@ const data = fs.readFileSync("testcases/parser_expression.in").toString();
 
 const parser = new Parser(data);
 const expr = parser.parse();
-const astprinter = new ASTPrinter(expr);
 
-console.log(astprinter.print());
+if (expr) {
+  const astprinter = new ASTPrinter(expr);
+  console.log(astprinter.print());
+}

@@ -2,7 +2,7 @@ export enum TokenType {
   EOF, ENDFILE, UNKNOWN,                        // endfile is "end.", unknown for errors
 
   // Math operators
-  PLUS, MINUS, MULTIPLY, POW, SLASH, DIV, MOD,  // + - * ** / div mod
+  PLUS, MINUS, MULTIPLY, SLASH, DIV, MOD,       // + - * / div mod
 
   // Bitwise & logic operators
   AND, OR, XOR, NOT, SHL, SHR,                  // << & >> also converted to SHL & SHR
@@ -89,7 +89,6 @@ const KeywordTokens : {[key: string]: TokenType} = {
   "not": TokenType.NOT,
   "of": TokenType.OF,
   "or": TokenType.OR,
-  "pow": TokenType.POW,
   "procedure": TokenType.PROCEDURE,
   "program": TokenType.PROGRAM,
   "record": TokenType.RECORD,
@@ -145,26 +144,12 @@ export class Scanner {
       // assignments & its single operator variants
       case '+':
       case '-':
+      case '*':
       case '/':
       case ':': {
         if (this.peek() === '=') {
           this.advance();
           type = AssignmentTokens[prev];
-        } else {
-          type = OneSymbolTokens[prev];
-        }
-
-        return this.makeToken(type);
-      }
-
-      case '*': {
-        const current = this.peek();
-        if (current === '=') {
-          this.advance();
-          type = AssignmentTokens[prev];
-        } else if (current === '*'){
-          this.advance();
-          type = TokenType.POW;
         } else {
           type = OneSymbolTokens[prev];
         }

@@ -1,6 +1,8 @@
+import { UnreachableErr } from "./errors";
 import { Token, TokenType } from "./scanner";
 
 export enum BaseType {
+  Void,
   Boolean,
   Char,
   Integer,
@@ -8,6 +10,19 @@ export enum BaseType {
 }
 
 export type PascalType = BaseType;
+
+export function isNumberType(type?: PascalType): boolean {
+  return type === BaseType.Integer || type === BaseType.Real;
+}
+
+export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
+  if (a == null || b == null) return false;
+  return a === b;
+}
+
+export function getTypeName(type?: PascalType): string {
+  return BaseType[ type || BaseType.Void];
+}
 
 export abstract class Expr {
   type: PascalType | undefined;
@@ -55,7 +70,7 @@ export namespace Expr {
 
       if (token.literal == null) {
         // should not go here
-        throw new Error("Can't build literal without value");
+        throw new UnreachableErr("Can't build literal without value");
       }
 
       this.literal = token.literal;
