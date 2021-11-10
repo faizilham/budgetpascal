@@ -1,5 +1,5 @@
 export enum TokenTag {
-  EOF, ENDFILE, UNKNOWN,                        // endfile is "end.", unknown for errors
+  EOF, UNKNOWN,                                 // token unknown for error markers
 
   // Math operators
   PLUS, MINUS, MULTIPLY, SLASH, DIV, MOD,       // + - * / div mod
@@ -26,7 +26,7 @@ export enum TokenTag {
   // Keywords
   ARRAY, BEGIN, BREAK, CONTINUE, CASE, CONST, DO, DOWNTO, ELSE, END, FOR,
   FUNCTION, FORWARD, IF, OF, PROCEDURE, PROGRAM, RECORD, REPEAT, THEN, TO,
-  TYPE, UNTIL, VAR, WHILE,
+  TYPE, UNTIL, VAR, WHILE, READ, READLN, WRITE, WRITELN
 }
 
 export class Token {
@@ -91,6 +91,8 @@ const KeywordTokens : {[key: string]: TokenTag} = {
   "or": TokenTag.OR,
   "procedure": TokenTag.PROCEDURE,
   "program": TokenTag.PROGRAM,
+  "read": TokenTag.READ,
+  "readln": TokenTag.READLN,
   "record": TokenTag.RECORD,
   "repeat": TokenTag.REPEAT,
   "shl": TokenTag.SHL,
@@ -102,6 +104,8 @@ const KeywordTokens : {[key: string]: TokenTag} = {
   "until": TokenTag.UNTIL,
   "var": TokenTag.VAR,
   "while": TokenTag.WHILE,
+  "write": TokenTag.WRITE,
+  "writeln": TokenTag.WRITELN,
   "xor": TokenTag.XOR,
 };
 
@@ -322,13 +326,6 @@ export class Scanner {
       }
       case TokenTag.FALSE: {
         token.literal = false;
-        break;
-      }
-      case TokenTag.END: {
-        if (this.peek() === '.') {
-          this.advance();
-        token.tag = TokenTag.ENDFILE;
-        }
         break;
       }
       default:

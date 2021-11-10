@@ -36,3 +36,4 @@ array begin break continue case
 const do downTo else end end. for
 function forward if of procedure program
 record repeat then to type until var while
+read readln write writeln

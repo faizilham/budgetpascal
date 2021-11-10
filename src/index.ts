@@ -9,12 +9,12 @@ import { Parser } from "./compiler/parser";
 import fs from "fs";
 import { ASTPrinter } from "./compiler/astprinter";
 
-const data = fs.readFileSync("testcases/parser_expression.in").toString();
+const data = fs.readFileSync("testcases/basic.pas").toString();
 
 const parser = new Parser(data);
-const expr = parser.parse();
+const program = parser.parse();
 
-if (expr) {
-  const astprinter = new ASTPrinter(expr);
+if (program) {
+  const astprinter = new ASTPrinter(program);
   console.log(astprinter.print());
 }

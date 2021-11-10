@@ -69,7 +69,8 @@ DO do 36
 DOWNTO downTo 36
 ELSE else 36
 END end 36
-ENDFILE end 36
+END end 36
+DOT . 36
 FOR for 36
 FUNCTION function 37
 FORWARD forward 37
@@ -85,3 +86,7 @@ TYPE type 38
 UNTIL until 38
 VAR var 38
 WHILE while 38
+READ read 39
+READLN readln 39
+WRITE write 39
+WRITELN writeln 39

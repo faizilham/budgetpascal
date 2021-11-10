@@ -1,6 +1,7 @@
 import { threadId } from "worker_threads";
 import { ParserError, UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
+import { Program, Stmt } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
 enum Precedence {
@@ -34,7 +35,7 @@ export class Parser {
   parse() {
     try {
       this.advance();
-      return this.expression();
+      return this.program();
     } catch(e: any) {
       if (e instanceof ParserError) {
         this.errorAtCurrent(e.message);
@@ -43,6 +44,84 @@ export class Parser {
       }
     }
   }
+
+  program(): Program {
+    this.consume(TokenTag.PROGRAM, "Expect 'program'.");
+    this.consume(TokenTag.IDENTIFIER, "Expect identifier program name.");
+    const programName = this.previous.lexeme;
+    this.consume(TokenTag.SEMICOLON, "Expect ';' after program name.");
+
+    const statements = this.compound();
+    this.consume(TokenTag.DOT, "Expect '.' after end.");
+
+    return new Program(programName, statements);
+  }
+
+  /** Statement **/
+  statement(): Stmt {
+    switch(this.current.tag) {
+      case TokenTag.BEGIN: return this.compound();
+
+      case TokenTag.WRITE:
+      case TokenTag.WRITELN:
+        return this.writeStmt();
+    }
+
+    throw new ParserError("Expect statement.");
+  }
+
+  compound(): Stmt.Compound {
+    this.consume(TokenTag.BEGIN, "Expect 'begin'.");
+
+    const statements: Stmt[] = [];
+
+    while (!this.check(TokenTag.EOF) && !this.check(TokenTag.END)) {
+      const stmt = this.statement();
+      statements.push(stmt);
+
+      if (!this.check(TokenTag.EOF) && !this.check(TokenTag.END)) {
+        this.consume(TokenTag.SEMICOLON, "Expect ';' between statements.");
+      }
+    }
+
+    this.consume(TokenTag.END, "Expect 'end'.");
+
+    return new Stmt.Compound(statements);
+  }
+
+  writeStmt(): Stmt {
+    this.advance();
+    const newline = this.previous.tag === TokenTag.WRITELN;
+    const outputs: Expr[] = [];
+
+    if (this.match(TokenTag.LEFT_PAREN)) {
+      while(!this.check(TokenTag.RIGHT_PAREN)) {
+        const expr = this.expression()
+        if (!this.isPrintable(expr.type)) {
+          throw new ParserError(`Can't write type ${getTypeName(expr.type)} to console`);
+        }
+        outputs.push(expr);
+
+        if (!this.check(TokenTag.RIGHT_PAREN)){
+          this.consume(TokenTag.COMMA, "Expect ',' between expressions.")
+        }
+      }
+
+      this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after expression.");
+    }
+
+    return new Stmt.Write(outputs, newline);
+  }
+
+  private isPrintable(type?: PascalType): boolean {
+    if (!type) return false;
+
+    // TODO: add string type
+    return type === BaseType.Boolean || type === BaseType.Char ||
+      type === BaseType.Integer || type === BaseType.Real;
+  }
+
+  /** Expression Parsing **/
 
   expression(): Expr {
     return this.parsePrecedence(Precedence.Relational);
@@ -226,7 +305,7 @@ export class Parser {
     return expr;
   }
 
-  // parser primitives
+  /** Parser primitives **/
 
   private precedence(token: Token): PrecedenceEntry {
     return this.precedenceRule[token.tag] || [null, null, Precedence.None];
@@ -284,7 +363,7 @@ function buildPrecedence(parser: Parser): PrecedenceTable {
   }
 
   return {
-    [TokenTag.STRING]:     entry(parser.literals, null, Precedence.None),
+    // [TokenTag.STRING]:     entry(parser.literals, null, Precedence.None),
     [TokenTag.CHAR]:       entry(parser.literals, null, Precedence.None),
     [TokenTag.INTEGER]:    entry(parser.literals, null, Precedence.None),
     [TokenTag.REAL]:       entry(parser.literals, null, Precedence.None),
