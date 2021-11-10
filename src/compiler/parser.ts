@@ -1,6 +1,6 @@
 import { threadId } from "worker_threads";
 import { ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
 import { Program, Stmt } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
@@ -157,11 +157,11 @@ export class Parser {
 
     // type check
     switch (operator.tag) {
-      case TokenTag.PLUS: { //
+      case TokenTag.PLUS: {
         if (!isNumberType(operand.type)) {
           throw new ParserError(`Unknown operator '+' for type ${getTypeName(operand.type)}`);
         }
-        return operand;
+        return operand; // no need to contain the operand inside a Unary tree
       }
 
       case TokenTag.MINUS: {
@@ -209,6 +209,8 @@ export class Parser {
       // (number, number) -> number
       case TokenTag.PLUS:
         //TODO: string-string, string-char, char-char plus operator
+        // use special expression AST for string concatenation
+
         // fallthrough
       case TokenTag.MINUS:
       case TokenTag.MULTIPLY: {
@@ -256,8 +258,7 @@ export class Parser {
         if (isTypeEqual(left.type, BaseType.Integer) &&
             isTypeEqual(right.type, BaseType.Integer)) {
           exprType = BaseType.Integer;
-        } else if (isTypeEqual(left.type, BaseType.Boolean) &&
-                   isTypeEqual(right.type, BaseType.Boolean)) {
+        } else if (isBool(left.type) && isBool(right.type)) {
           exprType = BaseType.Boolean
         } else {
           throw errorOperandType(left.type, right.type);
@@ -272,9 +273,13 @@ export class Parser {
       case TokenTag.GREATER_EQ:
       case TokenTag.LESS_EQ:
       case TokenTag.NOT_EQ: {
-        //TODO: char-char, string-string, and string-char comparison
+        //TODO: string-string, and string-char comparison
+        // use special expression AST for string comparison
 
-        if (isNumberType(left.type) && isNumberType(right.type)) {
+        if ((isNumberType(left.type) && isNumberType(right.type)) ||
+            (isBool(left.type) && isBool(right.type)) ||
+            ((left.type === BaseType.Char) && (right.type === BaseType.Char))
+            ) {
           exprType = BaseType.Boolean;
         } else {
           throw errorOperandType(left.type, right.type);

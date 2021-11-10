@@ -15,6 +15,10 @@ export function isNumberType(type?: PascalType): boolean {
   return type === BaseType.Integer || type === BaseType.Real;
 }
 
+export function isBool(type?: PascalType): boolean {
+  return type === BaseType.Boolean;
+}
+
 export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
   if (a == null || b == null) return false;
   return a === b;
@@ -51,7 +55,7 @@ export namespace Expr {
   }
 
   export class Literal extends Expr {
-    literal: boolean | number | string;
+    public literal: boolean | number | string;
     constructor(public token: Token){
       super();
 

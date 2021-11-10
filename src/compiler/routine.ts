@@ -37,8 +37,8 @@ export namespace Stmt {
     }
   }
 
-  export abstract class Visitor<T> {
-    public abstract visitCompound(stmt: Compound): T;
-    public abstract visitWrite(stmt: Write): T;
+  export interface Visitor<T> {
+    visitCompound(stmt: Compound): T;
+    visitWrite(stmt: Write): T;
   }
 }
