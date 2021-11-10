@@ -1,7 +1,7 @@
 import { threadId } from "worker_threads";
 import { ParserError, UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
-import { Scanner, Token, TokenType } from "./scanner";
+import { Scanner, Token, TokenTag } from "./scanner";
 
 enum Precedence {
   None,
@@ -16,7 +16,7 @@ enum Precedence {
 type PrefixExprHandler = ()=>Expr;
 type InfixExprHandler = ((left: Expr)=>Expr);
 type PrecedenceEntry = [PrefixExprHandler | null, InfixExprHandler | null, Precedence];
-type PrecedenceTable = {[key in TokenType]?: PrecedenceEntry};
+type PrecedenceTable = {[key in TokenTag]?: PrecedenceEntry};
 
 export class Parser {
   scanner: Scanner;
@@ -77,22 +77,22 @@ export class Parser {
     const operand = this.parsePrecedence(Precedence.Unary);
 
     // type check
-    switch (operator.type) {
-      case TokenType.PLUS: { //
+    switch (operator.tag) {
+      case TokenTag.PLUS: { //
         if (!isNumberType(operand.type)) {
           throw new ParserError(`Unknown operator '+' for type ${getTypeName(operand.type)}`);
         }
         return operand;
       }
 
-      case TokenType.MINUS: {
+      case TokenTag.MINUS: {
         if (!isNumberType(operand.type)) {
           throw new ParserError(`Unknown operator '-' for type ${getTypeName(operand.type)}`);
         }
         break;
       }
 
-      case TokenType.NOT: { // logic not and bitwise not
+      case TokenTag.NOT: { // logic not and bitwise not
         if (!isTypeEqual(operand.type, BaseType.Boolean) &&
             !isTypeEqual(operand.type, BaseType.Integer)) {
           throw new ParserError(`Unknown operator 'not' for type ${getTypeName(operand.type)}`);
@@ -123,16 +123,16 @@ export class Parser {
       return new ParserError(`Unknown operator '${op}' for type ${nameA} and ${nameB}`);
     }
 
-    switch(operator.type) {
+    switch(operator.tag) {
 
       // math operators
 
       // (number, number) -> number
-      case TokenType.PLUS:
+      case TokenTag.PLUS:
         //TODO: string-string, string-char, char-char plus operator
         // fallthrough
-      case TokenType.MINUS:
-      case TokenType.MULTIPLY: {
+      case TokenTag.MINUS:
+      case TokenTag.MULTIPLY: {
         if (!isNumberType(left.type) || !isNumberType(right.type)) {
           throw errorOperandType(left.type, right.type);
         }
@@ -149,7 +149,7 @@ export class Parser {
         break;
       }
 
-      case TokenType.SLASH: { // (number, number) -> real
+      case TokenTag.SLASH: { // (number, number) -> real
         if (!isNumberType(left.type) || !isNumberType(right.type)) {
           throw errorOperandType(left.type, right.type);
         }
@@ -158,10 +158,10 @@ export class Parser {
         break;
       }
 
-      case TokenType.DIV: // (int, int) -> int
-      case TokenType.MOD:
-      case TokenType.SHL:
-      case TokenType.SHR: {
+      case TokenTag.DIV: // (int, int) -> int
+      case TokenTag.MOD:
+      case TokenTag.SHL:
+      case TokenTag.SHR: {
         if (!isTypeEqual(left.type, BaseType.Integer) ||
             !isTypeEqual(right.type, BaseType.Integer)) {
           throw errorOperandType(left.type, right.type);
@@ -173,7 +173,7 @@ export class Parser {
 
     //   TokenType.AND
     //   TokenType.OR
-      case TokenType.XOR: {
+      case TokenTag.XOR: {
         if (isTypeEqual(left.type, BaseType.Integer) &&
             isTypeEqual(right.type, BaseType.Integer)) {
           exprType = BaseType.Integer;
@@ -187,12 +187,12 @@ export class Parser {
         break;
       }
 
-      case TokenType.EQUAL:
-      case TokenType.GREATER:
-      case TokenType.LESS:
-      case TokenType.GREATER_EQ:
-      case TokenType.LESS_EQ:
-      case TokenType.NOT_EQ: {
+      case TokenTag.EQUAL:
+      case TokenTag.GREATER:
+      case TokenTag.LESS:
+      case TokenTag.GREATER_EQ:
+      case TokenTag.LESS_EQ:
+      case TokenTag.NOT_EQ: {
         //TODO: char-char, string-string, and string-char comparison
 
         if (isNumberType(left.type) && isNumberType(right.type)) {
@@ -221,7 +221,7 @@ export class Parser {
 
   grouping(): Expr {
     const expr = this.expression();
-    this.consume(TokenType.RIGHT_PAREN, "Expect ')' after expression");
+    this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after expression");
 
     return expr;
   }
@@ -229,7 +229,7 @@ export class Parser {
   // parser primitives
 
   private precedence(token: Token): PrecedenceEntry {
-    return this.precedenceRule[token.type] || [null, null, Precedence.None];
+    return this.precedenceRule[token.tag] || [null, null, Precedence.None];
   }
 
   private advance(): Token {
@@ -237,7 +237,7 @@ export class Parser {
     for (;;) {
       this.current = this.scanner.scanToken();
 
-      if (this.current.type !== TokenType.UNKNOWN) break;
+      if (this.current.tag !== TokenTag.UNKNOWN) break;
 
       this.errorAtCurrent(this.scanner.lastError);
     }
@@ -245,11 +245,11 @@ export class Parser {
     return this.previous;
   }
 
-  private check(type: TokenType): boolean {
-    return this.current.type === type;
+  private check(type: TokenTag): boolean {
+    return this.current.tag === type;
   }
 
-  private match(type: TokenType): boolean {
+  private match(type: TokenTag): boolean {
     if (!this.check(type)) {
       return false;
     }
@@ -259,7 +259,7 @@ export class Parser {
     return true;
   }
 
-  private consume(type: TokenType, errMessage: string) {
+  private consume(type: TokenTag, errMessage: string) {
     if (!this.match(type)){
       this.errorAtCurrent(errMessage);
     }
@@ -284,35 +284,35 @@ function buildPrecedence(parser: Parser): PrecedenceTable {
   }
 
   return {
-    [TokenType.STRING]:     entry(parser.literals, null, Precedence.None),
-    [TokenType.CHAR]:       entry(parser.literals, null, Precedence.None),
-    [TokenType.INTEGER]:    entry(parser.literals, null, Precedence.None),
-    [TokenType.REAL]:       entry(parser.literals, null, Precedence.None),
-    [TokenType.TRUE]:       entry(parser.literals, null, Precedence.None),
-    [TokenType.FALSE]:      entry(parser.literals, null, Precedence.None),
+    [TokenTag.STRING]:     entry(parser.literals, null, Precedence.None),
+    [TokenTag.CHAR]:       entry(parser.literals, null, Precedence.None),
+    [TokenTag.INTEGER]:    entry(parser.literals, null, Precedence.None),
+    [TokenTag.REAL]:       entry(parser.literals, null, Precedence.None),
+    [TokenTag.TRUE]:       entry(parser.literals, null, Precedence.None),
+    [TokenTag.FALSE]:      entry(parser.literals, null, Precedence.None),
     // TokenType.Identifier
 
-    [TokenType.LEFT_PAREN]: entry(parser.grouping, null, Precedence.Call),
+    [TokenTag.LEFT_PAREN]: entry(parser.grouping, null, Precedence.Call),
     // TokenType.DOT
 
-    [TokenType.PLUS]:       entry(parser.unary, parser.binary, Precedence.Sums),
-    [TokenType.MINUS]:      entry(parser.unary, parser.binary, Precedence.Sums),
-    [TokenType.MULTIPLY]:   entry(null, parser.binary, Precedence.Products),
-    [TokenType.SLASH]:      entry(null, parser.binary, Precedence.Products),
-    [TokenType.DIV]:        entry(null, parser.binary, Precedence.Products),
-    [TokenType.MOD]:        entry(null, parser.binary, Precedence.Products),
+    [TokenTag.PLUS]:       entry(parser.unary, parser.binary, Precedence.Sums),
+    [TokenTag.MINUS]:      entry(parser.unary, parser.binary, Precedence.Sums),
+    [TokenTag.MULTIPLY]:   entry(null, parser.binary, Precedence.Products),
+    [TokenTag.SLASH]:      entry(null, parser.binary, Precedence.Products),
+    [TokenTag.DIV]:        entry(null, parser.binary, Precedence.Products),
+    [TokenTag.MOD]:        entry(null, parser.binary, Precedence.Products),
 
-    [TokenType.EQUAL]:      entry(null, parser.binary, Precedence.Relational),
-    [TokenType.GREATER]:    entry(null, parser.binary, Precedence.Relational),
-    [TokenType.LESS]:       entry(null, parser.binary, Precedence.Relational),
-    [TokenType.GREATER_EQ]: entry(null, parser.binary, Precedence.Relational),
-    [TokenType.LESS_EQ]:    entry(null, parser.binary, Precedence.Relational),
-    [TokenType.NOT_EQ]:     entry(null, parser.binary, Precedence.Relational),
+    [TokenTag.EQUAL]:      entry(null, parser.binary, Precedence.Relational),
+    [TokenTag.GREATER]:    entry(null, parser.binary, Precedence.Relational),
+    [TokenTag.LESS]:       entry(null, parser.binary, Precedence.Relational),
+    [TokenTag.GREATER_EQ]: entry(null, parser.binary, Precedence.Relational),
+    [TokenTag.LESS_EQ]:    entry(null, parser.binary, Precedence.Relational),
+    [TokenTag.NOT_EQ]:     entry(null, parser.binary, Precedence.Relational),
 
-    [TokenType.XOR]:        entry(null, parser.binary, Precedence.Sums),
-    [TokenType.SHL]:        entry(null, parser.binary, Precedence.Products),
-    [TokenType.SHR]:        entry(null, parser.binary, Precedence.Products),
-    [TokenType.NOT]:        entry(parser.unary, null, Precedence.Unary),
+    [TokenTag.XOR]:        entry(null, parser.binary, Precedence.Sums),
+    [TokenTag.SHL]:        entry(null, parser.binary, Precedence.Products),
+    [TokenTag.SHR]:        entry(null, parser.binary, Precedence.Products),
+    [TokenTag.NOT]:        entry(parser.unary, null, Precedence.Unary),
     // TokenType.AND & OR
   };
 }

@@ -1,4 +1,4 @@
-import { Scanner, TokenType } from "../scanner";
+import { Scanner, TokenTag } from "../scanner";
 import fs from "fs/promises";
 import { expect } from "chai";
 
@@ -14,7 +14,7 @@ describe("Scanner test", () => {
     const tokens = [];
 
     let token;
-    while((token = scanner.scanToken()).type !== TokenType.EOF ) {
+    while((token = scanner.scanToken()).tag !== TokenTag.EOF ) {
       tokens.push(token);
     }
 

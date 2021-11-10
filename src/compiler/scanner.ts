@@ -1,4 +1,4 @@
-export enum TokenType {
+export enum TokenTag {
   EOF, ENDFILE, UNKNOWN,                        // endfile is "end.", unknown for errors
 
   // Math operators
@@ -30,79 +30,79 @@ export enum TokenType {
 }
 
 export class Token {
-  constructor(public type: TokenType, public lexeme: string, public line: number,
+  constructor(public tag: TokenTag, public lexeme: string, public line: number,
     public literal?: (boolean|string|number)) {}
 
   toString(): string {
-    const values: any[] = [TokenType[this.type], this.lexeme, this.line];
+    const values: any[] = [TokenTag[this.tag], this.lexeme, this.line];
     if (this.literal != null) values.push(this.literal);
     return values.join(' ');
   }
 }
 
-const OneSymbolTokens : {[key: string]: TokenType} = {
-  "+": TokenType.PLUS,
-  "-": TokenType.MINUS,
-  "*": TokenType.MULTIPLY,
-  "/": TokenType.SLASH,
-  ":": TokenType.COLON,
-  "(": TokenType.LEFT_PAREN,
-  ")": TokenType.RIGHT_PAREN,
-  "[": TokenType.LEFT_SQUARE,
-  "]": TokenType.RIGHT_SQUARE,
-  "=": TokenType.EQUAL,
-  ">": TokenType.GREATER,
-  "<": TokenType.LESS,
-  ".": TokenType.DOT,
-  ",": TokenType.COMMA,
-  ";": TokenType.SEMICOLON,
+const OneSymbolTokens : {[key: string]: TokenTag} = {
+  "+": TokenTag.PLUS,
+  "-": TokenTag.MINUS,
+  "*": TokenTag.MULTIPLY,
+  "/": TokenTag.SLASH,
+  ":": TokenTag.COLON,
+  "(": TokenTag.LEFT_PAREN,
+  ")": TokenTag.RIGHT_PAREN,
+  "[": TokenTag.LEFT_SQUARE,
+  "]": TokenTag.RIGHT_SQUARE,
+  "=": TokenTag.EQUAL,
+  ">": TokenTag.GREATER,
+  "<": TokenTag.LESS,
+  ".": TokenTag.DOT,
+  ",": TokenTag.COMMA,
+  ";": TokenTag.SEMICOLON,
 };
 
 const AssignmentTokens = {
-  "+": TokenType.ASSIGN_PLUS,
-  "-": TokenType.ASSIGN_MIN,
-  "*": TokenType.ASSIGN_MUL,
-  "/": TokenType.ASSIGN_SLASH,
-  ":": TokenType.ASSIGN,
+  "+": TokenTag.ASSIGN_PLUS,
+  "-": TokenTag.ASSIGN_MIN,
+  "*": TokenTag.ASSIGN_MUL,
+  "/": TokenTag.ASSIGN_SLASH,
+  ":": TokenTag.ASSIGN,
 };
 
-const KeywordTokens : {[key: string]: TokenType} = {
-  "and": TokenType.AND,
-  "array": TokenType.ARRAY,
-  "begin": TokenType.BEGIN,
-  "break": TokenType.BREAK,
-  "continue": TokenType.CONTINUE,
-  "case": TokenType.CASE,
-  "const": TokenType.CONST,
-  "div": TokenType.DIV,
-  "do": TokenType.DO,
-  "downto": TokenType.DOWNTO,
-  "else": TokenType.ELSE,
-  "end": TokenType.END,
-  "false": TokenType.FALSE,
-  "for": TokenType.FOR,
-  "function": TokenType.FUNCTION,
-  "forward": TokenType.FORWARD,
-  "if": TokenType.IF,
-  "in": TokenType.IN,
-  "mod": TokenType.MOD,
-  "not": TokenType.NOT,
-  "of": TokenType.OF,
-  "or": TokenType.OR,
-  "procedure": TokenType.PROCEDURE,
-  "program": TokenType.PROGRAM,
-  "record": TokenType.RECORD,
-  "repeat": TokenType.REPEAT,
-  "shl": TokenType.SHL,
-  "shr": TokenType.SHR,
-  "then": TokenType.THEN,
-  "to": TokenType.TO,
-  "true": TokenType.TRUE,
-  "type": TokenType.TYPE,
-  "until": TokenType.UNTIL,
-  "var": TokenType.VAR,
-  "while": TokenType.WHILE,
-  "xor": TokenType.XOR,
+const KeywordTokens : {[key: string]: TokenTag} = {
+  "and": TokenTag.AND,
+  "array": TokenTag.ARRAY,
+  "begin": TokenTag.BEGIN,
+  "break": TokenTag.BREAK,
+  "continue": TokenTag.CONTINUE,
+  "case": TokenTag.CASE,
+  "const": TokenTag.CONST,
+  "div": TokenTag.DIV,
+  "do": TokenTag.DO,
+  "downto": TokenTag.DOWNTO,
+  "else": TokenTag.ELSE,
+  "end": TokenTag.END,
+  "false": TokenTag.FALSE,
+  "for": TokenTag.FOR,
+  "function": TokenTag.FUNCTION,
+  "forward": TokenTag.FORWARD,
+  "if": TokenTag.IF,
+  "in": TokenTag.IN,
+  "mod": TokenTag.MOD,
+  "not": TokenTag.NOT,
+  "of": TokenTag.OF,
+  "or": TokenTag.OR,
+  "procedure": TokenTag.PROCEDURE,
+  "program": TokenTag.PROGRAM,
+  "record": TokenTag.RECORD,
+  "repeat": TokenTag.REPEAT,
+  "shl": TokenTag.SHL,
+  "shr": TokenTag.SHR,
+  "then": TokenTag.THEN,
+  "to": TokenTag.TO,
+  "true": TokenTag.TRUE,
+  "type": TokenTag.TYPE,
+  "until": TokenTag.UNTIL,
+  "var": TokenTag.VAR,
+  "while": TokenTag.WHILE,
+  "xor": TokenTag.XOR,
 };
 
 export class Scanner {
@@ -132,7 +132,7 @@ export class Scanner {
 
     this.start = this.current;
     const prev = this.advance();
-    let type = TokenType.EOF;
+    let type = TokenTag.EOF;
 
     if (isNumber(prev)) {
       return this.number();
@@ -157,15 +157,15 @@ export class Scanner {
         return this.makeToken(type);
       }
 
-      case '=': return this.makeToken(TokenType.EQUAL);
+      case '=': return this.makeToken(TokenTag.EQUAL);
       case '>': {
         const current = this.peek();
 
         switch(current) {
-          case '>': type = TokenType.SHR; break;
-          case '=': type = TokenType.GREATER_EQ; break;
+          case '>': type = TokenTag.SHR; break;
+          case '=': type = TokenTag.GREATER_EQ; break;
           default:
-            return this.makeToken(TokenType.GREATER);
+            return this.makeToken(TokenTag.GREATER);
         }
 
         this.advance();
@@ -176,11 +176,11 @@ export class Scanner {
         const current = this.peek();
 
         switch(current) {
-          case '>': type = TokenType.NOT_EQ; break;
-          case '<': type = TokenType.SHL; break;
-          case '=': type = TokenType.LESS_EQ; break;
+          case '>': type = TokenTag.NOT_EQ; break;
+          case '<': type = TokenTag.SHL; break;
+          case '=': type = TokenTag.LESS_EQ; break;
           default:
-            return this.makeToken(TokenType.LESS);
+            return this.makeToken(TokenTag.LESS);
         }
 
         this.advance();
@@ -194,7 +194,7 @@ export class Scanner {
       case '.': {
         if (this.peek() === '.') {
           this.advance();
-          type = TokenType.RANGE;
+          type = TokenTag.RANGE;
         } else {
           type = OneSymbolTokens[prev];
         }
@@ -203,21 +203,21 @@ export class Scanner {
       }
 
       default: {
-        const foundType : TokenType | undefined = OneSymbolTokens[prev];
+        const foundType : TokenTag | undefined = OneSymbolTokens[prev];
 
         if (foundType != null) {
           return this.makeToken(foundType);
         }
       }
 
-      const token = this.makeToken(TokenType.UNKNOWN);
+      const token = this.makeToken(TokenTag.UNKNOWN);
       this.reportError(`Unknown symbol ${token.lexeme}`);
       return token;
     }
 
   }
 
-  makeToken(type: TokenType): Token {
+  makeToken(type: TokenTag): Token {
     const lexeme = this.text.substring(this.start, this.current);
     return new Token(type, lexeme, this.line);
   }
@@ -241,7 +241,7 @@ export class Scanner {
       if (this.current === lastIndex) {
         // no number after '.', illegal token
         this.reportError("Invalid number format, expected digits after '.'");
-        return this.makeToken(TokenType.UNKNOWN);
+        return this.makeToken(TokenTag.UNKNOWN);
       }
     }
 
@@ -261,16 +261,16 @@ export class Scanner {
       if (this.current === lastIndex) {
         // no number after (e|E)[+-]? , illegal token
         this.reportError("Invalid number format, expected digits after exponent sign");
-        return this.makeToken(TokenType.UNKNOWN);
+        return this.makeToken(TokenTag.UNKNOWN);
       }
     }
 
     let token;
     if (isInteger) {
-      token = this.makeToken(TokenType.INTEGER);
+      token = this.makeToken(TokenTag.INTEGER);
       token.literal = parseInt(token.lexeme, 10);
     } else {
-      token = this.makeToken(TokenType.REAL);
+      token = this.makeToken(TokenTag.REAL);
       token.literal = parseFloat(token.lexeme);
     }
 
@@ -287,15 +287,15 @@ export class Scanner {
     if (lastIndex === this.current) {
       // no number after #, illegal token
       this.reportError("Invalid char format, expected digits after '#'");
-      return this.makeToken(TokenType.UNKNOWN);
+      return this.makeToken(TokenTag.UNKNOWN);
     }
 
-    let token = this.makeToken(TokenType.CHAR);
+    let token = this.makeToken(TokenTag.CHAR);
     const charVal = parseInt(token.lexeme.substring(1), 10);
 
     if (charVal > 255) {
       this.reportError("Char code is larger than 255'");
-      return this.makeToken(TokenType.UNKNOWN);
+      return this.makeToken(TokenTag.UNKNOWN);
     }
 
     token.literal = charVal;
@@ -312,22 +312,22 @@ export class Scanner {
     const lexeme = this.text.substring(this.start, this.current);
     const identifier = lexeme.toLowerCase();
 
-    const keywordType = KeywordTokens[identifier] || TokenType.IDENTIFIER;
+    const keywordType = KeywordTokens[identifier] || TokenTag.IDENTIFIER;
     const token = new Token(keywordType, lexeme, this.line);
 
     switch (keywordType) {
-      case TokenType.TRUE: {
+      case TokenTag.TRUE: {
         token.literal = true;
         break;
       }
-      case TokenType.FALSE: {
+      case TokenTag.FALSE: {
         token.literal = false;
         break;
       }
-      case TokenType.END: {
+      case TokenTag.END: {
         if (this.peek() === '.') {
           this.advance();
-        token.type = TokenType.ENDFILE;
+        token.tag = TokenTag.ENDFILE;
         }
         break;
       }
@@ -355,10 +355,10 @@ export class Scanner {
     if (!finished) {
       // no matching ' found, illegal
       this.reportError("Wrong number of matching quote");
-      return this.makeToken(TokenType.UNKNOWN);
+      return this.makeToken(TokenTag.UNKNOWN);
     }
 
-    let token = this.makeToken(TokenType.STRING);
+    let token = this.makeToken(TokenTag.STRING);
     let str = token.lexeme.substring(1, token.lexeme.length - 1);
     token.literal = str.replace(/''/g, "'");
     return token;
@@ -366,7 +366,7 @@ export class Scanner {
 
   eofToken() {
     if (!this.eof) {
-      this.eof = new Token(TokenType.EOF, "", this.line);
+      this.eof = new Token(TokenTag.EOF, "", this.line);
     }
 
     this.eof.line = this.line;

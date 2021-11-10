@@ -1,5 +1,5 @@
 import { UnreachableErr } from "./errors";
-import { Token, TokenType } from "./scanner";
+import { Token, TokenTag } from "./scanner";
 
 export enum BaseType {
   Void,
@@ -55,15 +55,15 @@ export namespace Expr {
     constructor(public token: Token){
       super();
 
-      switch(token.type) {
-        case TokenType.INTEGER: this.type = BaseType.Integer; break;
-        case TokenType.REAL: this.type = BaseType.Real; break;
-        case TokenType.CHAR: this.type = BaseType.Char; break;
-        case TokenType.TRUE:
-        case TokenType.FALSE:
+      switch(token.tag) {
+        case TokenTag.INTEGER: this.type = BaseType.Integer; break;
+        case TokenTag.REAL: this.type = BaseType.Real; break;
+        case TokenTag.CHAR: this.type = BaseType.Char; break;
+        case TokenTag.TRUE:
+        case TokenTag.FALSE:
           this.type = BaseType.Boolean;
         break;
-        case TokenType.STRING:
+        case TokenTag.STRING:
           // TODO: fill after string type exist
         break;
       }
