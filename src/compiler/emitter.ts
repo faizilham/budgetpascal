@@ -124,7 +124,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>{
       // TokenTag.Plus should already eliminated by parser
 
       default:
-        throw new UnreachableErr("Invalid unary operator " + expr.operator.lexeme);
+        throw new UnreachableErr(`Invalid unary operator ${expr.operator.lexeme}`);
     }
   }
 
@@ -240,8 +240,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>{
           return this.wasm.i32.ne(a, b);
         }
       }
+
+      default:
+        throw new UnreachableErr(`Invalid binary operator ${expr.operator.lexeme}`);
     }
-    throw new Error("Method not implemented.");
   }
 
   private prepareComparator(exprA: Expr, instrA: number, exprB: Expr, instrB: number):
