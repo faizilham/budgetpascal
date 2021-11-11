@@ -1,14 +1,14 @@
-import binaryen from "binaryen";
+import binaryen, { UnreachableId } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool } from "./expression";
-import { Program, Stmt } from "./routine";
+import { Decl, Program, Routine, Stmt } from "./routine";
 import { TokenTag } from "./scanner";
 
 const PUTINT_MODE_INT = 0;
 const PUTINT_MODE_CHAR = 1;
 const PUTINT_MODE_BOOL = 2;
 
-export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>{
+export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.Visitor<void> {
   public wasm: binaryen.Module;
   public currentBlock: number[];
 
@@ -24,15 +24,21 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>{
 
   buildProgram() {
     // init module
+    if (!this.program.body) {
+      throw new Error("Panic: null program body");
+    }
 
     this.addImports();
 
+    this.buildDeclarations(this.program);
     this.program.body.accept(this);
     const body = this.currentBlock[0] as number;
 
     const main = this.wasm.addFunction("main", binaryen.none, binaryen.none, [], body);
     this.wasm.addFunctionExport("main", "main");
     this.wasm.setStart(main);
+
+    // console.log(this.wasm.emitText());
 
     this.wasm.optimize();
     if (!this.wasm.validate()) {
@@ -45,6 +51,34 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>{
       binaryen.createType([binaryen.i32, binaryen.i32]), binaryen.none);
     this.wasm.addFunctionImport("putreal", "rtl", "putreal", binaryen.f64, binaryen.none);
     this.wasm.addFunctionImport("putln", "rtl", "putln", binaryen.none, binaryen.none);
+  }
+
+  /* Declarations */
+  buildDeclarations(routine: Routine) {
+    for (let decl of routine.declarations) {
+      decl.accept(this);
+    }
+  }
+
+  visitVariableDecl(variable: Decl.Variable) {
+    const name = variable.entry.name;
+    let wasmType, initValue;
+    switch(variable.entry.type) {
+      case BaseType.Boolean:
+      case BaseType.Char:
+      case BaseType.Integer:
+        wasmType = binaryen.i32;
+        initValue = this.wasm.i32.const(0);
+      break;
+      case BaseType.Real:
+        wasmType = binaryen.f64;
+        initValue = this.wasm.f64.const(0);
+      break;
+      default:
+        throw new UnreachableErr(`Unknown variable type ${getTypeName(variable.entry.type)}.`);
+    }
+
+    this.wasm.addGlobal(name, wasmType, true, initValue);
   }
 
   /* Statements */
@@ -104,6 +138,26 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>{
   }
 
   /* Expressions */
+
+  visitGlobalVar(expr: Expr.GlobalVar): number {
+    const name = expr.name.lexeme;
+
+    let wasmType;
+    switch(expr.type) {
+      case BaseType.Boolean:
+      case BaseType.Char:
+      case BaseType.Integer:
+        wasmType = binaryen.i32;
+      break;
+      case BaseType.Real:
+        wasmType = binaryen.f64;
+      break;
+      default:
+        throw new UnreachableErr(`Unknown variable type ${getTypeName(expr.type)}.`);
+    }
+
+    return this.wasm.global.get(name, wasmType)
+  }
 
   visitUnary(expr: Expr.Unary): number {
     const operand = expr.operand.accept(this);

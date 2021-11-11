@@ -1,7 +1,7 @@
 import { threadId } from "worker_threads";
 import { ParserError, UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
-import { Program, Stmt } from "./routine";
+import { Decl, IdentifierType, Program, Routine, Stmt } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
 enum Precedence {
@@ -25,6 +25,7 @@ export class Parser {
   previous: Token;
   precedenceRule: PrecedenceTable;
   hasError: boolean;
+  currentRoutine: Routine;
 
   constructor(public text: string) {
     this.precedenceRule = this.buildPrecedence();
@@ -33,14 +34,18 @@ export class Parser {
     this.current = this.scanner.eofToken(); // placeholder value
     this.previous = this.current;
     this.hasError = false;
+    this.currentRoutine = new Program("");
   }
 
   parse(): Program | undefined  {
     try {
       this.advance();
-      const prog = this.program();
+      const program = this.currentRoutine as Program;
+
+      this.buildProgram(program);
       if (this.hasError) return;
-      return prog;
+
+      return program;
     } catch(e: any) {
       if (e instanceof ParserError) {
         this.reportError(e)
@@ -50,16 +55,102 @@ export class Parser {
     }
   }
 
-  private program(): Program | undefined {
+  private buildProgram(program: Program) {
     this.consume(TokenTag.PROGRAM, "Expect 'program'.");
     this.consume(TokenTag.IDENTIFIER, "Expect identifier program name.");
-    const programName = this.previous.lexeme;
+    program.name = this.previous.lexeme;
     this.consume(TokenTag.SEMICOLON, "Expect ';' after program name.");
 
-    const statements = this.compound();
-    this.consume(TokenTag.DOT, "Expect '.' after end.");
+    this.declarations();
 
-    return new Program(programName, statements);
+    program.body = this.compound();
+    this.consume(TokenTag.DOT, "Expect '.' after end.");
+  }
+
+  /** Declarations **/
+  private declarations() {
+    while(!this.check(TokenTag.BEGIN)) {
+      switch(this.current.tag) {
+        case TokenTag.CONST: this.constDeclaration(); break;
+        case TokenTag.VAR: this.varDeclaration(); break;
+        default:
+          throw this.errorAtCurrent(`Unknown declaration ${this.current.lexeme}`);
+      }
+      // TODO: sync declaration errors
+    }
+  }
+
+  private constDeclaration() {
+    this.advance();
+    do {
+      this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
+      const name = this.previous.lexeme;
+      this.consume(TokenTag.EQUAL, "Expect '=' after identifer.");
+
+      let value;
+      switch(this.current.tag) {
+        // TODO: case STRING
+        case TokenTag.CHAR:
+        case TokenTag.INTEGER:
+        case TokenTag.REAL:
+        case TokenTag.TRUE:
+        case TokenTag.FALSE:
+          value = this.advance();
+        break;
+        default:
+          throw this.errorAtCurrent("Expect literal value after '='.");
+      }
+
+      this.consume(TokenTag.SEMICOLON, "Expect ';' after value.");
+      const result = this.currentRoutine.identifiers.addConst(name, value);
+      if (!result) {
+        // report error but try to continue parsing
+        this.reportError(
+          this.errorAtCurrent(`Identifier '${name}' is already used in this scope.`)
+        );
+      }
+
+    } while (this.check(TokenTag.IDENTIFIER));
+  }
+
+  private varDeclaration() {
+    this.advance();
+    do {
+      const names: string[] = [];
+
+      do {
+        this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
+        names.push(this.previous.lexeme);
+        if (!this.match(TokenTag.COMMA)) break;
+      } while (this.check(TokenTag.IDENTIFIER));
+
+      this.consume(TokenTag.COLON, "Expect ':' after variable name.");
+      this.consume(TokenTag.IDENTIFIER, "Expect type name.");
+      const typeName = this.previous.lexeme;
+
+      this.consume(TokenTag.SEMICOLON, "Expect ';' after declaration.");
+
+      const type = this.currentRoutine.findType(typeName);
+      if (type == null) {
+        // report error but try to continue parsing
+        this.reportError(
+          this.errorAtCurrent(`Unknown type '${typeName}'.`)
+        );
+        continue;
+      }
+
+      for (let name of names) {
+        const entry = this.currentRoutine.identifiers.addVariable(name, type);
+        if (!entry) {
+          this.reportError(
+            this.errorAtCurrent(`Identifier '${name}' is already used in this scope.`)
+          );
+          continue;
+        }
+        this.currentRoutine.declarations.push(new Decl.Variable(entry));
+      }
+
+    } while (this.check(TokenTag.IDENTIFIER));
   }
 
   /** Statement **/
@@ -170,6 +261,22 @@ export class Parser {
 
   private expression(): Expr {
     return this.parsePrecedence(Precedence.Relational);
+  }
+
+  private variable(): Expr {
+    const varToken = this.previous;
+
+    const entry = this.currentRoutine.findIdentifier(varToken.lexeme);
+    if (!entry) throw this.errorAtPrevious(`Unknown identifier '${varToken}'.`);
+
+    switch(entry.entryType) {
+      case IdentifierType.Constant: return this.literals(entry.value);
+      case IdentifierType.Variable: {
+        return new Expr.GlobalVar(varToken, entry.type, entry.index);
+      };
+      default:
+        throw new UnreachableErr(`Unknown identifier type for ${entry}`);
+    }
   }
 
   private parsePrecedence(precedence: Precedence): Expr {
@@ -348,8 +455,8 @@ export class Parser {
     return expr;
   }
 
-  private literals(): Expr {
-    const expr = new Expr.Literal(this.previous);
+  private literals(constant?: Token): Expr {
+    const expr = new Expr.Literal(constant || this.previous);
     return expr;
   }
 
@@ -434,7 +541,7 @@ export class Parser {
       [TokenTag.REAL]:       entry(parser.literals, null, Precedence.None),
       [TokenTag.TRUE]:       entry(parser.literals, null, Precedence.None),
       [TokenTag.FALSE]:      entry(parser.literals, null, Precedence.None),
-      // TokenType.Identifier
+      [TokenTag.IDENTIFIER]: entry(parser.variable, null, Precedence.None),
 
       [TokenTag.LEFT_PAREN]: entry(parser.grouping, null, Precedence.Call),
       // TokenType.DOT

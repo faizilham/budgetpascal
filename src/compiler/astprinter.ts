@@ -9,6 +9,8 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
   }
 
   print(): string {
+    if (!this.root.body) return "<error>";
+
     let result = `program ${this.root.name}\n`;
 
     result += this.root.body.accept(this);
@@ -67,6 +69,9 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
       return "#" + expr.literal.toString();
     }
     return expr.literal.toString();
+  }
+  visitGlobalVar(expr: Expr.GlobalVar): string {
+    return expr.name.lexeme;
   }
 
 }

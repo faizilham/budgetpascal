@@ -85,9 +85,19 @@ export namespace Expr {
     }
   }
 
+  export class GlobalVar extends Expr {
+    constructor(public name: Token, public type: PascalType, public index: number){
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitGlobalVar(this);
+    }
+  }
+
   export interface Visitor<T> {
     visitUnary(expr: Unary): T;
     visitBinary(expr: Binary): T;
     visitLiteral(expr: Literal): T;
+    visitGlobalVar(expr: GlobalVar): T;
   }
 }
