@@ -11,7 +11,7 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
   print(): string {
     let result = `program ${this.root.name}\n`;
 
-    result += this.root.statements.accept(this);
+    result += this.root.body.accept(this);
 
     return result;
   }

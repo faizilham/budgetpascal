@@ -27,7 +27,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>{
 
     this.addImports();
 
-    this.program.statements.accept(this);
+    this.program.body.accept(this);
     const body = this.currentBlock[0] as number;
 
     const main = this.wasm.addFunction("main", binaryen.none, binaryen.none, [], body);

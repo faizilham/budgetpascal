@@ -2,15 +2,12 @@ import { Expr } from "./expression";
 
 export abstract class Routine {
   // declarations here
-  public statements: Stmt.Compound;
-  constructor(statements: Stmt.Compound){
-    this.statements = statements;
-  }
+  constructor(public body: Stmt.Compound){}
 }
 
 export class Program extends Routine {
-  constructor(public name: string, statements: Stmt.Compound) {
-    super(statements);
+  constructor(public name: string, body: Stmt.Compound) {
+    super(body);
   }
 }
 
