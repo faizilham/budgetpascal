@@ -17,12 +17,12 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.currentBlock = [];
   }
 
-  emit(): Uint8Array {
-    this.buildProgram();
+  emit(optimize: boolean = true): Uint8Array {
+    this.buildProgram(optimize);
     return this.wasm.emitBinary();
   }
 
-  buildProgram() {
+  buildProgram(optimize: boolean) {
     // init module
     if (!this.program.body) {
       throw new Error("Panic: null program body");
@@ -40,7 +40,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
     // console.log(this.wasm.emitText());
 
-    this.wasm.optimize();
+    if (optimize) this.wasm.optimize();
     if (!this.wasm.validate()) {
       throw new Error("Panic: invalid wasm");
     }
