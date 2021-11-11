@@ -30,7 +30,7 @@ export enum TokenTag {
 }
 
 export class Token {
-  constructor(public tag: TokenTag, public lexeme: string, public line: number,
+  constructor(public tag: TokenTag, public lexeme: string, public line: number, public column: number,
     public literal?: (boolean|string|number)) {}
 
   toString(): string {
@@ -113,6 +113,7 @@ export class Scanner {
   current: number = 0;
   start: number = 0;
   line: number = 1;
+  column: number = 1;
   eof: Token | null = null;
   lastError: string = "";
 
@@ -122,6 +123,7 @@ export class Scanner {
 
   reset() {
     this.line = 1;
+    this.column = 1;
     this.start = 0;
     this.current = 0;
     this.eof = null;
@@ -223,7 +225,7 @@ export class Scanner {
 
   makeToken(type: TokenTag): Token {
     const lexeme = this.text.substring(this.start, this.current);
-    return new Token(type, lexeme, this.line);
+    return new Token(type, lexeme, this.line, this.columnStart());
   }
 
   number() : Token {
@@ -317,7 +319,7 @@ export class Scanner {
     const identifier = lexeme.toLowerCase();
 
     const keywordType = KeywordTokens[identifier] || TokenTag.IDENTIFIER;
-    const token = new Token(keywordType, lexeme, this.line);
+    const token = new Token(keywordType, lexeme, this.line, this.columnStart());
 
     switch (keywordType) {
       case TokenTag.TRUE: {
@@ -363,10 +365,11 @@ export class Scanner {
 
   eofToken() {
     if (!this.eof) {
-      this.eof = new Token(TokenTag.EOF, "", this.line);
+      this.eof = new Token(TokenTag.EOF, "", this.line, this.column);
     }
 
     this.eof.line = this.line;
+    this.eof.column = this.column;
     return this.eof;
   }
 
@@ -374,8 +377,10 @@ export class Scanner {
     for (;;) {
       let current = this.peek();
       switch(current) {
-        case '\n':
+        case '\n': {
           this.line++;
+          this.column = 1;
+        }
           // fallthrough
         case ' ':
         case '\t':
@@ -433,7 +438,12 @@ export class Scanner {
     }
   }
 
+  private columnStart(): number {
+    return this.column - (this.current - this.start) - 1;
+  }
+
   private advance() : string {
+    this.column++;
     return this.text[this.current++];
   }
 

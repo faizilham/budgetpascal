@@ -413,7 +413,7 @@ export class Parser {
   }
 
   private reportError(err: ParserError) {
-    console.error(`Parser error on line ${err.token.line}: ${err.message}`);
+    console.error(`Error on line ${err.token.line} col ${err.token.column}: ${err.message}`);
   }
 
   private buildPrecedence(): PrecedenceTable {
