@@ -24,28 +24,33 @@ export class Parser {
   current: Token;
   previous: Token;
   precedenceRule: PrecedenceTable;
+  hasError: boolean;
 
   constructor(public text: string) {
+    this.precedenceRule = this.buildPrecedence();
+
     this.scanner = new Scanner(text);
     this.current = this.scanner.eofToken(); // placeholder value
     this.previous = this.current;
-    this.precedenceRule = buildPrecedence(this);
+    this.hasError = false;
   }
 
-  parse() {
+  parse(): Program | undefined  {
     try {
       this.advance();
-      return this.program();
+      const prog = this.program();
+      if (this.hasError) return;
+      return prog;
     } catch(e: any) {
       if (e instanceof ParserError) {
-        this.errorAtCurrent(e.message);
+        this.reportError(e)
       } else {
         console.error("Panic: ", e);
       }
     }
   }
 
-  program(): Program {
+  private program(): Program | undefined {
     this.consume(TokenTag.PROGRAM, "Expect 'program'.");
     this.consume(TokenTag.IDENTIFIER, "Expect identifier program name.");
     const programName = this.previous.lexeme;
@@ -58,29 +63,67 @@ export class Parser {
   }
 
   /** Statement **/
-  statement(): Stmt {
+  private statement(): Stmt {
     switch(this.current.tag) {
       case TokenTag.BEGIN: return this.compound();
 
       case TokenTag.WRITE:
       case TokenTag.WRITELN:
         return this.writeStmt();
-    }
 
-    throw new ParserError("Expect statement.");
+      default:
+        // defaulted to procedural call statement, will remove this error
+        throw this.errorAtCurrent("Expect statement");
+    }
   }
 
-  compound(): Stmt.Compound {
+  private synchronizeStatement() {
+    while(this.current.tag !== TokenTag.EOF) {
+      if (this.previous.tag === TokenTag.SEMICOLON) return;
+
+      switch(this.current.tag) {
+        case TokenTag.IF:
+        case TokenTag.THEN:
+        case TokenTag.ELSE:
+        case TokenTag.FOR:
+        case TokenTag.TO:
+        case TokenTag.DOWNTO:
+        case TokenTag.DO:
+        case TokenTag.WHILE:
+        case TokenTag.REPEAT:
+        case TokenTag.UNTIL:
+        case TokenTag.BEGIN:
+        case TokenTag.END:
+        case TokenTag.WRITE:
+        case TokenTag.WRITELN:
+        case TokenTag.READ:
+        case TokenTag.READLN:
+          return;
+        default:
+          this.advance();
+      }
+    }
+  }
+
+  private compound(): Stmt.Compound {
     this.consume(TokenTag.BEGIN, "Expect 'begin'.");
 
     const statements: Stmt[] = [];
 
     while (!this.check(TokenTag.EOF) && !this.check(TokenTag.END)) {
-      const stmt = this.statement();
-      statements.push(stmt);
+      try {
+        statements.push(this.statement());
 
-      if (!this.check(TokenTag.EOF) && !this.check(TokenTag.END)) {
-        this.consume(TokenTag.SEMICOLON, "Expect ';' between statements.");
+        if (!this.check(TokenTag.EOF) && !this.check(TokenTag.END)) {
+          this.consume(TokenTag.SEMICOLON, "Expect ';' between statements.");
+        }
+      } catch(e) {
+        if (e instanceof ParserError) {
+          this.reportError(e);
+          this.synchronizeStatement();
+        } else {
+          throw e; // panicking, propagate to upper layer
+        }
       }
     }
 
@@ -89,16 +132,18 @@ export class Parser {
     return new Stmt.Compound(statements);
   }
 
-  writeStmt(): Stmt {
+  private writeStmt(): Stmt {
     this.advance();
     const newline = this.previous.tag === TokenTag.WRITELN;
     const outputs: Expr[] = [];
 
     if (this.match(TokenTag.LEFT_PAREN)) {
       while(!this.check(TokenTag.RIGHT_PAREN)) {
-        const expr = this.expression()
+        const exprStart = this.current;
+        const expr = this.expression();
+
         if (!this.isPrintable(expr.type)) {
-          throw new ParserError(`Can't write type ${getTypeName(expr.type)} to console`);
+          throw this.errorAt(exprStart, `Can't write type ${getTypeName(expr.type)} to console`);
         }
         outputs.push(expr);
 
@@ -123,17 +168,17 @@ export class Parser {
 
   /** Expression Parsing **/
 
-  expression(): Expr {
+  private expression(): Expr {
     return this.parsePrecedence(Precedence.Relational);
   }
 
-  parsePrecedence(precedence: Precedence): Expr {
+  private parsePrecedence(precedence: Precedence): Expr {
     this.advance();
 
     const prefixRule = this.precedence(this.previous);
 
     if (!prefixRule || !prefixRule[0]) {
-      throw new ParserError("Expect expression");
+      throw this.errorAtPrevious("Expect expression");
     }
 
     let lefthand = prefixRule[0]();
@@ -151,22 +196,27 @@ export class Parser {
     return lefthand;
   }
 
-  unary(): Expr {
+  private unary(): Expr {
     const operator = this.previous;
     const operand = this.parsePrecedence(Precedence.Unary);
+
+    const errorOperandType = () => {
+      const op = operator.lexeme;
+      return this.errorAt(operator, `Unknown operator '${op}' for type ${getTypeName(operand.type)}`);
+    };
 
     // type check
     switch (operator.tag) {
       case TokenTag.PLUS: {
         if (!isNumberType(operand.type)) {
-          throw new ParserError(`Unknown operator '+' for type ${getTypeName(operand.type)}`);
+          throw errorOperandType();
         }
         return operand; // no need to contain the operand inside a Unary tree
       }
 
       case TokenTag.MINUS: {
         if (!isNumberType(operand.type)) {
-          throw new ParserError(`Unknown operator '-' for type ${getTypeName(operand.type)}`);
+          throw errorOperandType();
         }
         break;
       }
@@ -174,7 +224,7 @@ export class Parser {
       case TokenTag.NOT: { // logic not and bitwise not
         if (!isTypeEqual(operand.type, BaseType.Boolean) &&
             !isTypeEqual(operand.type, BaseType.Integer)) {
-          throw new ParserError(`Unknown operator 'not' for type ${getTypeName(operand.type)}`);
+          throw errorOperandType();
         }
         break;
       }
@@ -188,18 +238,18 @@ export class Parser {
     return expr;
   }
 
-  binary(left: Expr): Expr {
+  private binary(left: Expr): Expr {
     const operator = this.previous;
     const precedence = this.precedence(operator)[2];
     const right = this.parsePrecedence(precedence + 1);
 
     let exprType: PascalType = BaseType.Void;
 
-    function errorOperandType(a?: PascalType, b?: PascalType) {
+    const errorOperandType = () => {
       const op = operator.lexeme;
-      const nameA = getTypeName(a);
-      const nameB = getTypeName(b);
-      return new ParserError(`Unknown operator '${op}' for type ${nameA} and ${nameB}`);
+      const ltype = getTypeName(left.type);
+      const rtype = getTypeName(right.type);
+      return this.errorAt(operator, `Unknown operator '${op}' for type ${ltype} and ${rtype}`);
     }
 
     switch(operator.tag) {
@@ -215,7 +265,7 @@ export class Parser {
       case TokenTag.MINUS:
       case TokenTag.MULTIPLY: {
         if (!isNumberType(left.type) || !isNumberType(right.type)) {
-          throw errorOperandType(left.type, right.type);
+          throw errorOperandType();
         }
 
         const leftType = left.type as BaseType;
@@ -232,7 +282,7 @@ export class Parser {
 
       case TokenTag.SLASH: { // (number, number) -> real
         if (!isNumberType(left.type) || !isNumberType(right.type)) {
-          throw errorOperandType(left.type, right.type);
+          throw errorOperandType();
         }
 
         exprType = BaseType.Real;
@@ -245,7 +295,7 @@ export class Parser {
       case TokenTag.SHR: {
         if (!isTypeEqual(left.type, BaseType.Integer) ||
             !isTypeEqual(right.type, BaseType.Integer)) {
-          throw errorOperandType(left.type, right.type);
+          throw errorOperandType();
         }
 
         exprType = BaseType.Integer;
@@ -261,7 +311,7 @@ export class Parser {
         } else if (isBool(left.type) && isBool(right.type)) {
           exprType = BaseType.Boolean
         } else {
-          throw errorOperandType(left.type, right.type);
+          throw errorOperandType();
         }
 
         break;
@@ -282,7 +332,7 @@ export class Parser {
             ) {
           exprType = BaseType.Boolean;
         } else {
-          throw errorOperandType(left.type, right.type);
+          throw errorOperandType();
         }
 
         break;
@@ -298,12 +348,12 @@ export class Parser {
     return expr;
   }
 
-  literals(): Expr {
+  private literals(): Expr {
     const expr = new Expr.Literal(this.previous);
     return expr;
   }
 
-  grouping(): Expr {
+  private grouping(): Expr {
     const expr = this.expression();
     this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after expression");
 
@@ -323,7 +373,7 @@ export class Parser {
 
       if (this.current.tag !== TokenTag.UNKNOWN) break;
 
-      this.errorAtCurrent(this.scanner.lastError);
+      throw this.errorAtCurrent(this.scanner.lastError);
     }
 
     return this.previous;
@@ -345,58 +395,69 @@ export class Parser {
 
   private consume(type: TokenTag, errMessage: string) {
     if (!this.match(type)){
-      this.errorAtCurrent(errMessage);
+      throw this.errorAtCurrent(errMessage);
     }
   }
 
   private errorAtCurrent(message: string) {
-    this.errorAt(this.current, message);
+    return this.errorAt(this.current, message);
+  }
+
+  private errorAtPrevious(message: string) {
+    return this.errorAt(this.previous, message);
   }
 
   private errorAt(token: Token, message: string) {
-    console.error(`Parser error on line ${token.line}: ${message}`);
-  }
-}
-
-function buildPrecedence(parser: Parser): PrecedenceTable {
-  function entry(prefix: PrefixExprHandler | null,
-    infix: InfixExprHandler | null, prec: Precedence): PrecedenceEntry {
-    if (prefix) prefix = prefix.bind(parser);
-    if (infix) infix = infix.bind(parser);
-
-    return [prefix, infix, prec]
+    this.hasError = true;
+    return new ParserError(token, message);
   }
 
-  return {
-    // [TokenTag.STRING]:     entry(parser.literals, null, Precedence.None),
-    [TokenTag.CHAR]:       entry(parser.literals, null, Precedence.None),
-    [TokenTag.INTEGER]:    entry(parser.literals, null, Precedence.None),
-    [TokenTag.REAL]:       entry(parser.literals, null, Precedence.None),
-    [TokenTag.TRUE]:       entry(parser.literals, null, Precedence.None),
-    [TokenTag.FALSE]:      entry(parser.literals, null, Precedence.None),
-    // TokenType.Identifier
+  private reportError(err: ParserError) {
+    console.error(`Parser error on line ${err.token.line}: ${err.message}`);
+  }
 
-    [TokenTag.LEFT_PAREN]: entry(parser.grouping, null, Precedence.Call),
-    // TokenType.DOT
+  private buildPrecedence(): PrecedenceTable {
+    const parser = this;
 
-    [TokenTag.PLUS]:       entry(parser.unary, parser.binary, Precedence.Sums),
-    [TokenTag.MINUS]:      entry(parser.unary, parser.binary, Precedence.Sums),
-    [TokenTag.MULTIPLY]:   entry(null, parser.binary, Precedence.Products),
-    [TokenTag.SLASH]:      entry(null, parser.binary, Precedence.Products),
-    [TokenTag.DIV]:        entry(null, parser.binary, Precedence.Products),
-    [TokenTag.MOD]:        entry(null, parser.binary, Precedence.Products),
+    function entry(prefix: PrefixExprHandler | null,
+      infix: InfixExprHandler | null, prec: Precedence): PrecedenceEntry {
+      if (prefix) prefix = prefix.bind(parser);
+      if (infix) infix = infix.bind(parser);
 
-    [TokenTag.EQUAL]:      entry(null, parser.binary, Precedence.Relational),
-    [TokenTag.GREATER]:    entry(null, parser.binary, Precedence.Relational),
-    [TokenTag.LESS]:       entry(null, parser.binary, Precedence.Relational),
-    [TokenTag.GREATER_EQ]: entry(null, parser.binary, Precedence.Relational),
-    [TokenTag.LESS_EQ]:    entry(null, parser.binary, Precedence.Relational),
-    [TokenTag.NOT_EQ]:     entry(null, parser.binary, Precedence.Relational),
+      return [prefix, infix, prec]
+    }
 
-    [TokenTag.XOR]:        entry(null, parser.binary, Precedence.Sums),
-    [TokenTag.SHL]:        entry(null, parser.binary, Precedence.Products),
-    [TokenTag.SHR]:        entry(null, parser.binary, Precedence.Products),
-    [TokenTag.NOT]:        entry(parser.unary, null, Precedence.Unary),
-    // TokenType.AND & OR
-  };
+    return {
+      // [TokenTag.STRING]:     entry(parser.literals, null, Precedence.None),
+      [TokenTag.CHAR]:       entry(parser.literals, null, Precedence.None),
+      [TokenTag.INTEGER]:    entry(parser.literals, null, Precedence.None),
+      [TokenTag.REAL]:       entry(parser.literals, null, Precedence.None),
+      [TokenTag.TRUE]:       entry(parser.literals, null, Precedence.None),
+      [TokenTag.FALSE]:      entry(parser.literals, null, Precedence.None),
+      // TokenType.Identifier
+
+      [TokenTag.LEFT_PAREN]: entry(parser.grouping, null, Precedence.Call),
+      // TokenType.DOT
+
+      [TokenTag.PLUS]:       entry(parser.unary, parser.binary, Precedence.Sums),
+      [TokenTag.MINUS]:      entry(parser.unary, parser.binary, Precedence.Sums),
+      [TokenTag.MULTIPLY]:   entry(null, parser.binary, Precedence.Products),
+      [TokenTag.SLASH]:      entry(null, parser.binary, Precedence.Products),
+      [TokenTag.DIV]:        entry(null, parser.binary, Precedence.Products),
+      [TokenTag.MOD]:        entry(null, parser.binary, Precedence.Products),
+
+      [TokenTag.EQUAL]:      entry(null, parser.binary, Precedence.Relational),
+      [TokenTag.GREATER]:    entry(null, parser.binary, Precedence.Relational),
+      [TokenTag.LESS]:       entry(null, parser.binary, Precedence.Relational),
+      [TokenTag.GREATER_EQ]: entry(null, parser.binary, Precedence.Relational),
+      [TokenTag.LESS_EQ]:    entry(null, parser.binary, Precedence.Relational),
+      [TokenTag.NOT_EQ]:     entry(null, parser.binary, Precedence.Relational),
+
+      [TokenTag.XOR]:        entry(null, parser.binary, Precedence.Sums),
+      [TokenTag.SHL]:        entry(null, parser.binary, Precedence.Products),
+      [TokenTag.SHR]:        entry(null, parser.binary, Precedence.Products),
+      [TokenTag.NOT]:        entry(parser.unary, null, Precedence.Unary),
+      // TokenType.AND & OR
+    };
+  }
 }

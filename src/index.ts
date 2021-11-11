@@ -5,7 +5,9 @@ import { ASTPrinter } from "./compiler/astprinter";
 
 const debugWasm = true;
 
-const data = fs.readFileSync("testcases/basic.pas").toString();
+const filename = "testcases/basic.pas";
+// const filename = "testcases/parse_err.pas";
+const data = fs.readFileSync(filename).toString();
 
 function testParser() {
   const parser = new Parser(data);
