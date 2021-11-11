@@ -2,11 +2,12 @@ import { compile } from "./compiler";
 import { Parser } from "./compiler/parser";
 import fs from "fs";
 import { ASTPrinter } from "./compiler/astprinter";
+import { ErrLogger } from "./compiler/errors";
 
 const debugWasm = true;
 
 const filename = "testcases/basic.pas";
-// const filename = "testcases/parse_err.pas";
+// const filename = "testcases/errors/type_err.pas";
 const data = fs.readFileSync(filename).toString();
 
 function testParser() {
@@ -24,7 +25,7 @@ const binary = compile(data);
 if (binary) {
   if (debugWasm) {
     fs.writeFile("tmp/debug.wasm", binary, (err) => {
-      if (err) console.error(err.message);
+      if (err) ErrLogger.logger.error(err.message);
     });
   }
 

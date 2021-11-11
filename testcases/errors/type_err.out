@@ -1,0 +1,23 @@
+Error on line 14 col 5: Can't assign value of type Real to Integer
+Error on line 15 col 5: Can't assign value of type Char to Real
+Error on line 16 col 5: Can't assign value of type Char to Boolean
+Error on line 17 col 5: Can't assign value of type Real to Integer
+Error on line 19 col 10: Unknown operator 'div' for type Integer and Char
+Error on line 20 col 10: Unknown operator 'mod' for type Integer and Real
+Error on line 21 col 10: Unknown operator '+' for type Integer and Boolean
+Error on line 22 col 10: Unknown operator '-' for type Integer and Char
+Error on line 23 col 12: Unknown operator '*' for type Real and Char
+Error on line 24 col 12: Unknown operator '/' for type Real and Boolean
+Error on line 25 col 12: Unknown operator '>>' for type Real and Integer
+Error on line 26 col 12: Unknown operator '<<' for type Real and Char
+Error on line 28 col 10: Unknown operator '=' for type Real and Boolean
+Error on line 29 col 10: Unknown operator '<>' for type Integer and Boolean
+Error on line 30 col 10: Unknown operator '<' for type Integer and Boolean
+Error on line 31 col 10: Unknown operator '>' for type Integer and Char
+Error on line 32 col 10: Unknown operator '>=' for type Boolean and Char
+Error on line 33 col 10: Unknown operator '<=' for type Real and Char
+Error on line 35 col 5: Unknown operator '+=' for type Boolean and Integer
+Error on line 36 col 5: Unknown operator '-=' for type Real and Char
+Error on line 37 col 5: Unknown operator '*=' for type Char and Integer
+Error on line 38 col 5: Can't assign value of type Real to Integer
+Error on line 40 col 8: Expect variable or array member.

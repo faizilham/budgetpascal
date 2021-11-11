@@ -24,4 +24,4 @@ describe("Scanner test", () => {
       expect(tokens[i].toString()).to.eq(results[i]);
     }
   });
-})
+});

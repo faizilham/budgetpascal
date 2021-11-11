@@ -1,5 +1,5 @@
 import { threadId } from "worker_threads";
-import { ParserError, UnreachableErr } from "./errors";
+import { ErrLogger, ParserError, UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
 import { Decl, IdentifierType, Program, Routine, Stmt } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
@@ -26,8 +26,9 @@ export class Parser {
   precedenceRule: PrecedenceTable;
   hasError: boolean;
   currentRoutine: Routine;
+  logger: ErrLogger.Reporter;
 
-  constructor(public text: string) {
+  constructor(public text: string, logger?: ErrLogger.Reporter) {
     this.precedenceRule = this.buildPrecedence();
 
     this.scanner = new Scanner(text);
@@ -35,6 +36,7 @@ export class Parser {
     this.previous = this.current;
     this.hasError = false;
     this.currentRoutine = new Program("");
+    this.logger = logger || ErrLogger.logger;
   }
 
   parse(): Program | undefined  {
@@ -50,7 +52,7 @@ export class Parser {
       if (e instanceof ParserError) {
         this.reportError(e)
       } else {
-        console.error("Panic: ", e);
+        this.logger.error("Panic: ", e);
       }
     }
   }
@@ -232,18 +234,16 @@ export class Parser {
     const outputs: Expr[] = [];
 
     if (this.match(TokenTag.LEFT_PAREN)) {
-      while(!this.check(TokenTag.RIGHT_PAREN)) {
-        const exprStart = this.current;
-        const expr = this.expression();
+      if (!this.check(TokenTag.RIGHT_PAREN)) {
+        do {
+          const exprStart = this.current;
+          const expr = this.expression();
 
-        if (!this.isPrintable(expr.type)) {
-          throw this.errorAt(exprStart, `Can't write type ${getTypeName(expr.type)} to console`);
-        }
-        outputs.push(expr);
-
-        if (!this.check(TokenTag.RIGHT_PAREN)){
-          this.consume(TokenTag.COMMA, "Expect ',' between expressions.")
-        }
+          if (!this.isPrintable(expr.type)) {
+            throw this.errorAt(exprStart, `Can't write type ${getTypeName(expr.type)} to console`);
+          }
+          outputs.push(expr);
+        } while (this.match(TokenTag.COMMA));
       }
 
       this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after expression.");
@@ -321,7 +321,7 @@ export class Parser {
     const varToken = this.previous;
 
     const entry = this.currentRoutine.findIdentifier(varToken.lexeme);
-    if (!entry) throw this.errorAtPrevious(`Unknown identifier '${varToken}'.`);
+    if (!entry) throw this.errorAtPrevious(`Unknown identifier '${varToken.lexeme}'.`);
 
     switch(entry.entryType) {
       case IdentifierType.Constant: return this.literals(entry.value);
@@ -574,7 +574,7 @@ export class Parser {
   }
 
   private reportError(err: ParserError) {
-    console.error(`Error on line ${err.token.line} col ${err.token.column}: ${err.message}`);
+    this.logger.error(`Error on line ${err.token.line} col ${err.token.column}: ${err.message}`);
   }
 
   private buildPrecedence(): PrecedenceTable {

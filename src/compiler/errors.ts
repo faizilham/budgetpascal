@@ -7,3 +7,11 @@ export class UnreachableErr extends Error {
 export class ParserError extends Error {
   constructor(public token: Token, message: string) { super(message); }
 }
+
+export namespace ErrLogger {
+  export interface Reporter {
+    error(...messages: any[]): void;
+  }
+
+  export const logger: Reporter = console;
+}

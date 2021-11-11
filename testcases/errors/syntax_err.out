@@ -1,0 +1,6 @@
+Error on line 4 col 12: Expect expression
+Error on line 5 col 9: Unknown symbol ~
+Error on line 6 col 18: Expect expression
+Error on line 7 col 17: Expect ')' after expression.
+Error on line 9 col 3: Expect ';' between statements.
+Error on line 10 col 20: Unknown identifier 'a'.
