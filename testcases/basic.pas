@@ -7,6 +7,7 @@ const
 var
   a, b: integer;
   c: char;
+  r: real;
 
 begin
   writeln;
@@ -20,7 +21,12 @@ begin
   writeln(1 < 1.2, 1 > 1, 1 = 1.1, 1 <> 1);
   writeln(false <> true);
 
+  a := 7;
   writeln(a*9, space, c > #9);
+
+  r := 2;
+  r *= a;
+  writeln(r);
 
   begin
     writeln(false);

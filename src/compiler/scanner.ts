@@ -33,6 +33,10 @@ export class Token {
   constructor(public tag: TokenTag, public lexeme: string, public line: number, public column: number,
     public literal?: (boolean|string|number)) {}
 
+  copy(): Token {
+    return new Token(this.tag, this.lexeme, this.line, this.column, this.literal);
+  }
+
   toString(): string {
     const values: any[] = [TokenTag[this.tag], this.lexeme, this.line];
     if (this.literal != null) values.push(this.literal);

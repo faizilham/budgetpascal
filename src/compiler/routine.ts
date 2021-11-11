@@ -139,6 +139,15 @@ export namespace Stmt {
     }
   }
 
+  export class SetGlobalVar extends Stmt {
+    constructor(public target: Expr.GlobalVar, public value: Expr) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitSetGlobalVar(this);
+    }
+  }
+
   export class Write extends Stmt {
     constructor(public outputs: Expr[], public newline: boolean) {
       super();
@@ -150,6 +159,7 @@ export namespace Stmt {
 
   export interface Visitor<T> {
     visitCompound(stmt: Compound): T;
+    visitSetGlobalVar(stmt: SetGlobalVar): T;
     visitWrite(stmt: Write): T;
   }
 }

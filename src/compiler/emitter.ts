@@ -82,7 +82,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   }
 
   /* Statements */
-  public visitCompound(stmt: Stmt.Compound) {
+  visitCompound(stmt: Stmt.Compound) {
     let prevBlock = this.currentBlock;
     this.currentBlock = [];
 
@@ -102,7 +102,21 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     }
   }
 
-  public visitWrite(stmt: Stmt.Write) {
+  visitSetGlobalVar(stmt: Stmt.SetGlobalVar): void {
+    let exprInstr = stmt.value.accept(this);
+
+
+    if (stmt.target.type === BaseType.Real) {
+      exprInstr = this.intoReal(stmt.value, exprInstr);
+    }
+    // TODO: handle string?
+
+    this.currentBlock.push(
+      this.wasm.global.set(stmt.target.name.lexeme, exprInstr)
+    );
+  }
+
+  visitWrite(stmt: Stmt.Write) {
     for (let e of stmt.outputs) {
       let params: number[] = [];
 

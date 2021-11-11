@@ -162,8 +162,11 @@ export class Parser {
       case TokenTag.WRITELN:
         return this.writeStmt();
 
+      case TokenTag.IDENTIFIER:
+        return this.identifierStmt();
+
       default:
-        // defaulted to procedural call statement, will remove this error
+        // TODO: defaulted to ?
         throw this.errorAtCurrent("Expect statement");
     }
   }
@@ -247,6 +250,57 @@ export class Parser {
     }
 
     return new Stmt.Write(outputs, newline);
+  }
+
+  private identifierStmt(): Stmt {
+    const expr = this.expression();
+
+    const modifyToken = (tag: TokenTag) => {
+      const modifier = this.current.copy();
+      modifier.tag = tag;
+      return modifier;
+    }
+
+    switch(this.current.tag) {
+      case TokenTag.ASSIGN_PLUS:
+        return this.assignment(expr, modifyToken(TokenTag.PLUS));
+      case TokenTag.ASSIGN_MIN:
+        return this.assignment(expr, modifyToken(TokenTag.MINUS));
+      case TokenTag.ASSIGN_MUL:
+        return this.assignment(expr, modifyToken(TokenTag.MULTIPLY));
+      case TokenTag.ASSIGN_SLASH:
+        return this.assignment(expr, modifyToken(TokenTag.SLASH));
+      case TokenTag.ASSIGN:
+        return this.assignment(expr);
+
+    }
+
+    throw this.errorAtCurrent("Expect assignment or procedure call");
+  }
+
+  private assignment(left: Expr, modifier?: Token) : Stmt {
+    if (!left.assignable) {
+      throw this.errorAtCurrent("Expect variable or array member.");
+    }
+
+    const operator = this.advance();
+    let right = this.expression();
+    if (modifier) {
+      right = this.binary(left, modifier, right);
+    }
+
+    // Type check;
+    if (!isTypeEqual(left.type, right.type)) {
+      // the only valid implicit typecast is integer to real
+      if (left.type !== BaseType.Real || right.type !== BaseType.Integer) {
+        throw this.errorAt(operator,
+          `Can't assign value of type ${getTypeName(right.type)} to ${getTypeName(left.type)}`);
+      }
+    }
+
+    const target = left as Expr.GlobalVar;
+
+    return new Stmt.SetGlobalVar(target, right);
   }
 
   private isPrintable(type?: PascalType): boolean {
@@ -345,10 +399,10 @@ export class Parser {
     return expr;
   }
 
-  private binary(left: Expr): Expr {
-    const operator = this.previous;
+  private binary(left: Expr, _operator?: Token, _right?: Expr): Expr {
+    const operator = _operator || this.previous;
     const precedence = this.precedence(operator)[2];
-    const right = this.parsePrecedence(precedence + 1);
+    const right = _right || this.parsePrecedence(precedence + 1);
 
     let exprType: PascalType = BaseType.Void;
 

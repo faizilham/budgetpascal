@@ -29,6 +29,7 @@ export function getTypeName(type?: PascalType): string {
 }
 
 export abstract class Expr {
+  assignable: boolean = false;
   type: PascalType | undefined;
   public abstract accept<T>(visitor: Expr.Visitor<T>) : T;
 }
@@ -88,6 +89,7 @@ export namespace Expr {
   export class GlobalVar extends Expr {
     constructor(public name: Token, public type: PascalType, public index: number){
       super();
+      this.assignable = true;
     }
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitGlobalVar(this);

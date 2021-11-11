@@ -45,6 +45,13 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     return this.tabbed(results.join(" "));
   }
 
+  visitSetGlobalVar(stmt: Stmt.SetGlobalVar): string {
+    const target = stmt.target.accept(this);
+    const value = stmt.value.accept(this);
+
+    return this.tabbed(`${target} := ${value}`);
+  }
+
   tabbed(s: string) {
     return `${"  ".repeat(this.tab)}${s}`;
   }
