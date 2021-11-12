@@ -35,17 +35,17 @@ export class Program extends Routine {
 
 /* Identifier Table */
 export type IdentifierEntry = VariableEntry | ConstantEntry;
-export enum IdentifierType {
-  Constant,
-  Variable
-}
+export enum IdentifierType { Constant, Variable }
+
+export enum VariableLevel { GLOBAL, LOCAL, UPPER }
 
 export interface VariableEntry {
   entryType: IdentifierType.Variable;
   name: string;
   type: PascalType;
   index: number;
-  initialized: boolean
+  initialized: boolean;
+  level: VariableLevel;
 }
 
 export interface ConstantEntry {
@@ -56,13 +56,9 @@ export interface ConstantEntry {
 
 export class IdentifierTable {
   table: {[key: string]: IdentifierEntry}
-  varCount: number;
-  constCount: number;
 
   constructor() {
     this.table = {};
-    this.varCount = 0;
-    this.constCount = 0;
   }
 
   public addVariable(name: string, type: PascalType): VariableEntry | null {
@@ -74,8 +70,9 @@ export class IdentifierTable {
       entryType: IdentifierType.Variable,
       name,
       type,
-      index: this.varCount++,
-      initialized: false
+      index: 0, // will be set by emitter
+      initialized: false,
+      level: VariableLevel.LOCAL
     }
     this.table[name] = entry;
 
@@ -93,7 +90,6 @@ export class IdentifierTable {
       value
     }
     this.table[name] = entry;
-    this.constCount++;
 
     return entry;
   }
@@ -139,6 +135,27 @@ export namespace Stmt {
     }
   }
 
+  export class CaseStmt extends Stmt {
+    public checkValue: Expr
+    public branches: Stmt[] = []
+    public constants: Array<number | Range> = []
+    public elseBranch?: Stmt
+
+    constructor(checkValue: Expr) {
+      super();
+      this.checkValue = checkValue;
+    }
+
+    addCase(constant: number | Range, branch: Stmt) {
+      this.constants.push(constant);
+      this.branches.push(branch);
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitCaseStmt(this);
+    }
+  }
+
   export class IfElse extends Stmt {
     constructor(public condition: Expr, public body?: Stmt, public elseBody?: Stmt) {
       super();
@@ -148,12 +165,12 @@ export namespace Stmt {
     }
   }
 
-  export class SetGlobalVar extends Stmt {
-    constructor(public target: Expr.GlobalVar, public value: Expr) {
+  export class SetVariable extends Stmt {
+    constructor(public target: Expr.Variable, public value: Expr) {
       super();
     }
     public accept<T>(visitor: Visitor<T>): T {
-      return visitor.visitSetGlobalVar(this);
+      return visitor.visitSetVariable(this);
     }
   }
 
@@ -168,8 +185,9 @@ export namespace Stmt {
 
   export interface Visitor<T> {
     visitCompound(stmt: Compound): T;
+    visitCaseStmt(stmt: CaseStmt): T;
     visitIfElse(stmt: IfElse): T;
-    visitSetGlobalVar(stmt: SetGlobalVar): T;
+    visitSetVariable(stmt: SetVariable): T;
     visitWrite(stmt: Write): T;
   }
 }

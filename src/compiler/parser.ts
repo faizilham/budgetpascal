@@ -347,9 +347,9 @@ export class Parser {
       }
     }
 
-    const target = left as Expr.GlobalVar;
+    const target = left as Expr.Variable;
 
-    return new Stmt.SetGlobalVar(target, right);
+    return new Stmt.SetVariable(target, right);
   }
 
   /** Expression Parsing **/
@@ -367,7 +367,7 @@ export class Parser {
     switch(entry.entryType) {
       case IdentifierType.Constant: return this.literals(entry.value);
       case IdentifierType.Variable: {
-        return new Expr.GlobalVar(varToken, entry.type, entry.index);
+        return new Expr.Variable(entry);
       };
       default:
         throw new UnreachableErr(`Unknown identifier type for ${entry}`);

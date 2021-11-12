@@ -1,17 +1,29 @@
 import binaryen, { UnreachableId } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool } from "./expression";
-import { Decl, Program, Routine, Stmt } from "./routine";
+import { Decl, Program, Routine, Stmt, VariableLevel } from "./routine";
 import { TokenTag } from "./scanner";
 
 const PUTINT_MODE_INT = 0;
 const PUTINT_MODE_CHAR = 1;
 const PUTINT_MODE_BOOL = 2;
 
+class Context {
+  parent?: Context;
+  routine: Routine;
+  locals: number[];
+  constructor(routine: Routine, parent?: Context) {
+    this.routine = routine;
+    this.parent = parent;
+    this.locals = [];
+  }
+}
+
 export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.Visitor<void> {
   private wasm: binaryen.Module;
   private currentBlock: number[];
   private prevBlocks: number[][];
+  private currentContext?: Context;
 
   constructor(private program: Program) {
     this.wasm = new binaryen.Module();
@@ -32,11 +44,15 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
     this.addImports();
 
+    this.startContext(this.program);
     this.buildDeclarations(this.program);
     this.program.body.accept(this);
-    const body = this.currentBlock[0] as number;
 
-    const main = this.wasm.addFunction("main", binaryen.none, binaryen.none, [], body);
+    const body = this.currentBlock[0] as number;
+    const locals = this.context().locals;
+    const main = this.wasm.addFunction("main", binaryen.none, binaryen.none, locals, body);
+    this.endContext();
+
     this.wasm.addFunctionExport("main", "main");
     this.wasm.setStart(main);
 
@@ -63,9 +79,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   }
 
   visitVariableDecl(variable: Decl.Variable) {
-    const name = variable.entry.name;
+    const entry = variable.entry;
+    const name = entry.name;
     let wasmType, initValue;
-    switch(variable.entry.type) {
+    switch(entry.type) {
       case BaseType.Boolean:
       case BaseType.Char:
       case BaseType.Integer:
@@ -77,10 +94,36 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         initValue = this.wasm.f64.const(0);
       break;
       default:
-        throw new UnreachableErr(`Unknown variable type ${getTypeName(variable.entry.type)}.`);
+        throw new UnreachableErr(`Unknown variable type ${getTypeName(entry.type)}.`);
     }
 
-    this.wasm.addGlobal(name, wasmType, true, initValue);
+    switch(entry.level) {
+      case VariableLevel.GLOBAL: {
+        this.wasm.addGlobal(name, wasmType, true, initValue);
+        break;
+      }
+      case VariableLevel.LOCAL: {
+          const locals = this.context().locals;
+          entry.index = locals.length;
+          locals.push(wasmType);
+        break;
+      }
+      default:
+        new UnreachableErr(`Unknown variable scope level ${entry.level}.`); //TODO: upper variable
+    }
+  }
+
+  private startContext(routine: Routine) {
+    const context = new Context(routine, this.currentContext);
+    this.currentContext = context;
+  }
+
+  private endContext() {
+    this.currentContext = this.context().parent;
+  }
+
+  private context(): Context {
+    return this.currentContext as Context;
   }
 
   /* Statements */
@@ -117,6 +160,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     }
   }
 
+  visitCaseStmt(stmt: Stmt.CaseStmt): void {
+    // TODO:
+    throw new Error("Method not implemented.");
+  }
+
   visitIfElse(stmt: Stmt.IfElse) {
     let condition = stmt.condition.accept(this);
 
@@ -147,18 +195,32 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   }
 
 
-  visitSetGlobalVar(stmt: Stmt.SetGlobalVar) {
+  visitSetVariable(stmt: Stmt.SetVariable) {
+    const entry = stmt.target.entry;
     let exprInstr = stmt.value.accept(this);
-
 
     if (stmt.target.type === BaseType.Real) {
       exprInstr = this.intoReal(stmt.value, exprInstr);
     }
     // TODO: handle string?
 
-    this.currentBlock.push(
-      this.wasm.global.set(stmt.target.name.lexeme, exprInstr)
-    );
+    let instr;
+
+    switch(entry.level) {
+      case VariableLevel.GLOBAL: {
+        instr = this.wasm.global.set(stmt.target.entry.name, exprInstr);
+        break;
+      }
+      case VariableLevel.LOCAL: {
+        instr = this.wasm.local.set(entry.index, exprInstr);
+        break;
+      }
+      default:
+        //TODO: upper variable
+        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
+    }
+
+    this.currentBlock.push(instr);
   }
 
   visitWrite(stmt: Stmt.Write) {
@@ -198,8 +260,8 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
   /* Expressions */
 
-  visitGlobalVar(expr: Expr.GlobalVar): number {
-    const name = expr.name.lexeme;
+  visitVariable(expr: Expr.Variable): number {
+    const entry = expr.entry;
 
     let wasmType;
     switch(expr.type) {
@@ -215,7 +277,16 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         throw new UnreachableErr(`Unknown variable type ${getTypeName(expr.type)}.`);
     }
 
-    return this.wasm.global.get(name, wasmType)
+    switch(entry.level) {
+      case VariableLevel.GLOBAL:
+        return this.wasm.global.get(entry.name, wasmType)
+      case VariableLevel.LOCAL: {
+        return this.wasm.local.get(entry.index, wasmType);
+      }
+      default:
+        //TODO: upper variable
+        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
+    }
   }
 
   visitUnary(expr: Expr.Unary): number {

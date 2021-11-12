@@ -1,4 +1,5 @@
 import { UnreachableErr } from "./errors";
+import { VariableEntry } from "./routine";
 import { Token, TokenTag } from "./scanner";
 
 export enum BaseType {
@@ -26,6 +27,10 @@ export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
 
 export function getTypeName(type?: PascalType): string {
   return BaseType[ type || BaseType.Void];
+}
+
+export class Range {
+  constructor(public type: BaseType, public start: number, public end: number){}
 }
 
 export abstract class Expr {
@@ -97,13 +102,14 @@ export namespace Expr {
     }
   }
 
-  export class GlobalVar extends Expr {
-    constructor(public name: Token, public type: PascalType, public index: number){
+  export class Variable extends Expr {
+    constructor(public entry: VariableEntry){
       super();
       this.assignable = true;
+      this.type = entry.type;
     }
     public accept<T>(visitor: Visitor<T>): T {
-      return visitor.visitGlobalVar(this);
+      return visitor.visitVariable(this);
     }
   }
 
@@ -112,6 +118,6 @@ export namespace Expr {
     visitBinary(expr: Binary): T;
     visitLiteral(expr: Literal): T;
     visitShortCircuit(expr: ShortCircuit): T;
-    visitGlobalVar(expr: GlobalVar): T;
+    visitVariable(expr: Variable): T;
   }
 }

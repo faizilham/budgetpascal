@@ -1,7 +1,5 @@
 import { compile } from "./compiler";
-import { Parser } from "./compiler/parser";
 import fs from "fs";
-import { ASTPrinter } from "./compiler/astprinter";
 import { ErrLogger } from "./compiler/errors";
 
 const debugWasm = true;
@@ -10,15 +8,15 @@ const filename = "testcases/branching.pas";
 // const filename = "testcases/errors/declaration_err.pas";
 const data = fs.readFileSync(filename).toString();
 
-function testParser() {
-  const parser = new Parser(data);
-  const program = parser.parse();
+// function testParser() {
+//   const parser = new Parser(data);
+//   const program = parser.parse();
 
-  if (program) {
-    const astprinter = new ASTPrinter(program);
-    console.log(astprinter.print());
-  }
-}
+//   if (program) {
+//     const astprinter = new ASTPrinter(program);
+//     console.log(astprinter.print());
+//   }
+// }
 
 const binary = compile(data);
 

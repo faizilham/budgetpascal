@@ -34,6 +34,11 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     return result.join("\n");
   }
 
+  visitCaseStmt(stmt: Stmt.CaseStmt): string {
+    // TODO:
+    throw new Error("Method not implemented.");
+  }
+
   visitIfElse(stmt: Stmt.IfElse): string {
     let results = [];
 
@@ -68,7 +73,7 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     return this.tabbed(results.join(" "));
   }
 
-  visitSetGlobalVar(stmt: Stmt.SetGlobalVar): string {
+  visitSetVariable(stmt: Stmt.SetVariable): string {
     const target = stmt.target.accept(this);
     const value = stmt.value.accept(this);
 
@@ -107,8 +112,8 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     }
     return expr.literal.toString();
   }
-  visitGlobalVar(expr: Expr.GlobalVar): string {
-    return expr.name.lexeme;
+  visitVariable(expr: Expr.Variable): string {
+    return expr.entry.name;
   }
 
 }
