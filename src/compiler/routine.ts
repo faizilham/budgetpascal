@@ -1,4 +1,4 @@
-import { BaseType, Expr, PascalType } from "./expression";
+import { BaseType, Expr, isTypeEqual, PascalType } from "./expression";
 import { Token } from "./scanner";
 
 export abstract class Routine {
@@ -46,6 +46,7 @@ export interface VariableEntry {
   index: number;
   initialized: boolean;
   level: VariableLevel;
+  reserved: boolean; // only used for temp variables
 }
 
 export interface ConstantEntry {
@@ -56,10 +57,11 @@ export interface ConstantEntry {
 
 export class IdentifierTable {
   table: {[key: string]: IdentifierEntry}
-  tempVarCount: number = 0;
+  tempVars: VariableEntry[];
 
   constructor() {
     this.table = {};
+    this.tempVars = [];
   }
 
   public addVariable(name: string, type: PascalType): VariableEntry | null {
@@ -73,15 +75,22 @@ export class IdentifierTable {
       type,
       index: 0, // will be set by emitter
       initialized: false,
-      level: VariableLevel.LOCAL
+      level: VariableLevel.LOCAL,
+      reserved: false
     }
     this.table[name] = entry;
 
     return entry;
   }
 
-  public addTempVariable(type: PascalType): VariableEntry {
-    const tempIndex = this.tempVarCount++;
+  public getTempVariable(type: PascalType): [VariableEntry, boolean] {
+    for (const temp of this.tempVars) {
+      if (!temp.reserved && isTypeEqual(type, temp.type)) {
+        return [temp, true];
+      }
+    }
+
+    const tempIndex = this.tempVars.length;
     const name = `tempvar::${tempIndex}`;
     const entry: VariableEntry = {
       entryType: IdentifierType.Variable,
@@ -89,10 +98,12 @@ export class IdentifierTable {
       type,
       index: 0, // will be set by emitter
       initialized: false,
-      level: VariableLevel.LOCAL
-    }
-    this.table[name] = entry;
-    return entry;
+      level: VariableLevel.LOCAL,
+      reserved: false
+    };
+
+    this.tempVars.push(entry);
+    return [entry, false];
   }
 
   public addConst(name: string, value: Token): ConstantEntry | null {
@@ -151,12 +162,32 @@ export namespace Stmt {
     }
   }
 
+  export class ForLoop extends Stmt {
+    constructor(public initializations: Stmt[], public condition: Expr,
+      public increment: Stmt, public body: Stmt){
+        super()
+      }
+
+      public accept<T>(visitor: Visitor<T>): T {
+        return visitor.visitForLoop(this);
+      }
+  }
+
   export class IfElse extends Stmt {
     constructor(public condition: Expr, public body?: Stmt, public elseBody?: Stmt) {
       super();
     }
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitIfElse(this);
+    }
+  }
+
+  export class Increment extends Stmt {
+    constructor(public target: Expr.Variable, public ascending: boolean) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitIncrement(this);
     }
   }
 
@@ -207,7 +238,9 @@ export namespace Stmt {
 
   export interface Visitor<T> {
     visitCompound(stmt: Compound): T;
+    visitForLoop(stmt: ForLoop): T;
     visitIfElse(stmt: IfElse): T;
+    visitIncrement(stmt: Increment): T;
     visitLoopControl(stmt: LoopControl): T;
     visitRepeatUntil(stmt: RepeatUntil): T;
     visitSetVariable(stmt: SetVariable): T;

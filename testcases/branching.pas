@@ -81,5 +81,24 @@ begin
     writeln;
   end;
 
+  a := 3;
+  for i := 1 to a + 1 do
+    write(10 + i, #32);
+  writeln(a);
 
+  for i := a downto 1 do begin
+    if i = 2 then continue;
+    write(20 + i, #32);
+  end;
+  writeln(a);
+
+  for i := 2 to 1 do
+    write(50 + i, #32);
+  writeln(a);
+
+  for c := #65 to #100 do begin
+    write(c);
+    if c = #70 then break;
+  end;
+  writeln;
 end.

@@ -1,6 +1,6 @@
 import binaryen, { UnreachableId } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, PascalType } from "./expression";
 import { Decl, Program, Routine, Stmt, VariableLevel } from "./routine";
 import { TokenTag } from "./scanner";
 
@@ -168,6 +168,45 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     }
   }
 
+  visitForLoop(stmt: Stmt.ForLoop) {
+    const prevLoop = this.currentLoop;
+    this.currentLoop = this.addLoop();
+
+    this.startBlock(); // start outer block
+
+    for (const s of stmt.initializations){
+      s.accept(this);
+    }
+
+    this.startBlock();// start loop block
+
+    let condition = stmt.condition.accept(this);
+    const loopLabel = this.getLoopLabel();
+    const outerLabel = this.getOuterLoopLabel();
+
+    // increment first
+    stmt.increment.accept(this);
+
+    // then check conditions
+    this.currentBlock.push(
+      this.wasm.br_if(outerLabel, this.wasm.i32.eqz(condition))
+    );
+
+    stmt.body.accept(this);
+
+    this.currentBlock.push(
+      this.wasm.br(loopLabel)
+    );
+
+    const loopblock = this.endBlock(loopLabel, true); // end of loop block
+    this.currentBlock.push(loopblock);
+
+    const outerblock = this.endBlock(outerLabel); //end of outer block
+    this.currentBlock.push(outerblock);
+
+    this.currentLoop = prevLoop;
+  }
+
   visitIfElse(stmt: Stmt.IfElse) {
     let condition = stmt.condition.accept(this);
 
@@ -195,6 +234,35 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.currentBlock.push(
       this.wasm.if(condition, ifTrue, ifFalse)
     );
+  }
+
+  visitIncrement(stmt: Stmt.Increment): void {
+    const entry = stmt.target.entry;
+
+    const increment = (left: number) => (
+      stmt.ascending ?
+      this.wasm.i32.add(left, this.wasm.i32.const(1)) :
+      this.wasm.i32.sub(left, this.wasm.i32.const(1))
+    )
+
+    let instr;
+    switch(entry.level) {
+      case VariableLevel.GLOBAL: {
+        instr = this.wasm.global.get(stmt.target.entry.name, binaryen.i32);
+        instr = this.wasm.global.set(stmt.target.entry.name, increment(instr));
+        break;
+      }
+      case VariableLevel.LOCAL: {
+        instr = this.wasm.local.get(entry.index, binaryen.i32)
+        instr = this.wasm.local.set(entry.index, increment(instr));
+        break;
+      }
+      default:
+        //TODO: upper variable
+        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
+    }
+
+    this.currentBlock.push(instr);
   }
 
   visitLoopControl(stmt: Stmt.LoopControl) {

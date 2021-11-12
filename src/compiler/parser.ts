@@ -2,7 +2,7 @@ import { assert } from "console";
 import { threadId } from "worker_threads";
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
-import { Decl, IdentifierType, Program, Routine, Stmt } from "./routine";
+import { Decl, IdentifierType, Program, Routine, Stmt, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
 export class Parser {
@@ -167,6 +167,19 @@ export class Parser {
     }
   }
 
+  private reserveTempVariable(type: PascalType): VariableEntry {
+    const [entry, exist] = this.currentRoutine.identifiers.getTempVariable(type);
+    entry.reserved = true;
+    if (!exist){
+      this.currentRoutine.declarations.push(new Decl.Variable(entry));
+    }
+    return entry;
+  }
+
+  private releaseTempVariable(entry: VariableEntry) {
+    entry.reserved = false;
+  }
+
   /** Statement **/
   private statement(): Stmt {
     let result;
@@ -179,6 +192,7 @@ export class Parser {
       break;
 
       case TokenTag.CASE: result = this.caseStmt(); break;
+      case TokenTag.FOR: result = this.forLoop(); break;
       case TokenTag.IF: result = this.ifElse(); break;
       case TokenTag.REPEAT: result = this.repeatUntil(); break;
       case TokenTag.WHILE: result = this.whileDo(); break;
@@ -261,10 +275,11 @@ export class Parser {
     const type = checkValue.type as PascalType;
 
     if (!isOrdinal(type)) {
-      throw this.errorAt(exprStart, "Expected expression with ordinal type.");
+      throw this.errorAt(exprStart, "Expect expression with ordinal type.");
     }
 
-    const tempVar = new Expr.Variable(this.currentRoutine.identifiers.addTempVariable(type));
+    const tempVarEntry = this.reserveTempVariable(type);
+    const tempVar = new Expr.Variable(tempVarEntry);
 
     let initVarStmt = new Stmt.SetVariable(tempVar, checkValue);
     let root: Stmt.IfElse | null = null;
@@ -296,6 +311,7 @@ export class Parser {
     }
 
     this.consume(TokenTag.END, "Expect 'end' after case statement.");
+    this.releaseTempVariable(tempVarEntry);
 
     return new Stmt.Compound([
       initVarStmt,
@@ -351,6 +367,83 @@ export class Parser {
 
     operator = new Token(TokenTag.AND, "and", startToken.line, startToken.column);
     return this.binary(startCheck, operator, endCheck);
+  }
+
+  private forLoop(): Stmt {
+    this.advance();
+    this.advance(); // variable() reads from previous
+
+    const iterator = this.variable();
+
+    if (!(iterator instanceof Expr.Variable)) {
+      throw this.errorAtPrevious(`Expect variable in a for loop.`);
+    } else if (iterator.entry.level === VariableLevel.UPPER) {
+      throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
+    } else if (!isOrdinal(iterator.type)) {
+      throw this.errorAtPrevious("Expect variable with ordinal type.");
+    }
+
+    const initializations = [];
+
+    // parse initial value expression
+    this.consume(TokenTag.ASSIGN, "Expect ':=' after variable.")
+
+    let lastToken = this.current;
+    const initVal = this.expression();
+
+    if (!isTypeEqual(iterator.type, initVal.type)) {
+      throw this.errorAt(lastToken, "Mismatch type between iterator variable and initial value.");
+    }
+
+    // generate iterator := initVal
+    initializations.push(new Stmt.SetVariable(iterator, initVal));
+
+    // parse final value expression
+    if (!this.match(TokenTag.TO) && !this.match(TokenTag.DOWNTO)) {
+      throw this.errorAtCurrent("Expect 'to' or 'downto' after initialization.");
+    }
+    const steppingToken = this.previous; // save to / downto token
+    const ascending = steppingToken.tag === TokenTag.TO;
+
+    lastToken = this.current;
+    const finalValue = this.expression();
+
+    if (!isTypeEqual(iterator.type, finalValue.type)) {
+      throw this.errorAt(lastToken, "Mismatch type between iterator variable and final value.");
+    }
+
+    const tempvar = this.reserveTempVariable(iterator.type as PascalType);
+    const finalVariable = new Expr.Variable(tempvar);
+
+    // generate finalVariable := finalValue
+    initializations.push(new Stmt.SetVariable(finalVariable, finalValue));
+
+    this.consume(TokenTag.DO, "Expect 'do' after final value.")
+
+    let conditionOperator;
+
+    if (ascending) {
+      conditionOperator = new Token(TokenTag.LESS_EQ, "<=",
+        steppingToken.line, steppingToken.column);
+    } else {
+      conditionOperator = new Token(TokenTag.GREATER_EQ, ">=",
+        steppingToken.line, steppingToken.column);
+    }
+
+    const condition = this.binary(iterator, conditionOperator, finalVariable);
+
+    // start 1 place before start value, as increment will be done before condition check
+    initializations.push(new Stmt.Increment(iterator, !ascending));
+    const increment = new Stmt.Increment(iterator, ascending)
+
+    try {
+      this.loopLevel++;
+      const body = this.statement();
+      return new Stmt.ForLoop(initializations, condition, increment, body);
+    } finally {
+      this.releaseTempVariable(tempvar)
+      this.loopLevel--;
+    }
   }
 
   private ifElse(): Stmt {

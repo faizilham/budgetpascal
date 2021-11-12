@@ -33,6 +33,11 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     return result.join("\n");
   }
 
+  visitForLoop(stmt: Stmt.ForLoop): string {
+    //TODO:
+    throw new Error("Method not implemented.");
+  }
+
   visitIfElse(stmt: Stmt.IfElse): string {
     let results = [];
 
@@ -54,6 +59,11 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     }
 
     return results.join("\n");
+  }
+
+  visitIncrement(stmt: Stmt.Increment): string {
+    //TODO:
+    throw new Error("Method not implemented.");
   }
 
   visitLoopControl(stmt: Stmt.LoopControl): string {
