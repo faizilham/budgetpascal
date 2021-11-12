@@ -35,6 +35,8 @@ const runTest = async (testname: string) => {
 };
 
 describe("Compiler test", () => {
-  it("Generate correct output for basic_expression program",
+  it("Generate correct output for 'basic_expression' program",
     async () => runTest("basic_expression"));
+    it("Generate correct output for 'branching' program",
+    async () => runTest("branching"));
 })

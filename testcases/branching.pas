@@ -17,8 +17,10 @@ begin
 
   if a = 4 then begin
     writeln(4);
+    if a mod 2 = 0 then writeln(4.5);
   end else begin
     writeln(5);
+    if a mod 2 = 1 then writeln(5.5);
   end;
 
   a := 7;

@@ -25,7 +25,7 @@ export class MockConsole {
           }
         },
         putreal: (x: number) => { currentLines.push(x.toExponential()); },
-        putln: () => { lines.push(currentLines.join("")); currentLines = []; }
+        putln: () => { lines.push(currentLines.join("").trim()); currentLines = []; }
       }
     }
   }
