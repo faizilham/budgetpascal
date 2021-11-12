@@ -4,21 +4,6 @@ import { BaseType, Expr, getTypeName, isBool, isNumberType as isNumberType, isTy
 import { Decl, IdentifierType, Program, Routine, Stmt } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
-enum Precedence {
-  None,
-  Relational, // all relational operators
-  Sums,       // + - or xor
-  Products,   // * / div mod and shl shr
-  Unary,      // not & unary +-
-  Call,       // ( ) .
-}
-
-// PrecedenceEntry: <prefix function, infix function, precedence>
-type PrefixExprHandler = ()=>Expr;
-type InfixExprHandler = ((left: Expr)=>Expr);
-type PrecedenceEntry = [PrefixExprHandler | null, InfixExprHandler | null, Precedence];
-type PrecedenceTable = {[key in TokenTag]?: PrecedenceEntry};
-
 export class Parser {
   scanner: Scanner;
   current: Token;
@@ -443,9 +428,10 @@ export class Parser {
       return this.errorAt(operator, `Unknown operator '${op}' for type ${ltype} and ${rtype}`);
     }
 
+    // Type check
     switch(operator.tag) {
 
-      // math operators
+      /* Math & Logic Operators */
 
       // (number, number) -> number
       case TokenTag.PLUS:
@@ -493,8 +479,20 @@ export class Parser {
         break;
       }
 
-    //   TokenType.AND
-    //   TokenType.OR
+      case TokenTag.AND:
+      case TokenTag.OR: {
+        if (isTypeEqual(left.type, BaseType.Integer) &&
+            isTypeEqual(right.type, BaseType.Integer)) {
+          exprType = BaseType.Integer;
+        } else if (isBool(left.type) && isBool(right.type)) {
+          return new Expr.ShortCircuit(operator, left, right);
+        } else {
+          throw errorOperandType();
+        }
+
+        break;
+      }
+
       case TokenTag.XOR: {
         if (isTypeEqual(left.type, BaseType.Integer) &&
             isTypeEqual(right.type, BaseType.Integer)) {
@@ -508,6 +506,7 @@ export class Parser {
         break;
       }
 
+      /* Comparators */
       case TokenTag.EQUAL:
       case TokenTag.GREATER:
       case TokenTag.LESS:
@@ -644,11 +643,29 @@ export class Parser {
       [TokenTag.LESS_EQ]:    entry(null, parser.binary, Precedence.Relational),
       [TokenTag.NOT_EQ]:     entry(null, parser.binary, Precedence.Relational),
 
+      [TokenTag.AND]:        entry(null, parser.binary, Precedence.Products),
+      [TokenTag.OR]:         entry(null, parser.binary, Precedence.Sums),
       [TokenTag.XOR]:        entry(null, parser.binary, Precedence.Sums),
       [TokenTag.SHL]:        entry(null, parser.binary, Precedence.Products),
       [TokenTag.SHR]:        entry(null, parser.binary, Precedence.Products),
       [TokenTag.NOT]:        entry(parser.unary, null, Precedence.Unary),
-      // TokenType.AND & OR
     };
   }
 }
+
+/* Precedence Types */
+
+enum Precedence {
+  None,
+  Relational, // all relational operators
+  Sums,       // + - or xor
+  Products,   // * / div mod and shl shr
+  Unary,      // not & unary +-
+  Call,       // ( ) .
+}
+
+// PrecedenceEntry: <prefix function, infix function, precedence>
+type PrefixExprHandler = ()=>Expr;
+type InfixExprHandler = ((left: Expr)=>Expr);
+type PrecedenceEntry = [PrefixExprHandler | null, InfixExprHandler | null, Precedence];
+type PrecedenceTable = {[key in TokenTag]?: PrecedenceEntry};

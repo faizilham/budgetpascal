@@ -86,6 +86,17 @@ export namespace Expr {
     }
   }
 
+  export class ShortCircuit extends Expr {
+    constructor(public operator: Token, public a: Expr, public b: Expr){
+      super();
+      this.type = BaseType.Boolean;
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitShortCircuit(this);
+    }
+  }
+
   export class GlobalVar extends Expr {
     constructor(public name: Token, public type: PascalType, public index: number){
       super();
@@ -100,6 +111,7 @@ export namespace Expr {
     visitUnary(expr: Unary): T;
     visitBinary(expr: Binary): T;
     visitLiteral(expr: Literal): T;
+    visitShortCircuit(expr: ShortCircuit): T;
     visitGlobalVar(expr: GlobalVar): T;
   }
 }

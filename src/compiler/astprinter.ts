@@ -71,6 +71,13 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
 
     return str + ")";
   }
+  visitShortCircuit(expr: Expr.ShortCircuit): string {
+    let str = `(${typeName(expr.type)} ${expr.operator.lexeme} `;
+    str += expr.a.accept(this) + " ";
+    str += expr.b.accept(this);
+
+    return str + ")";
+  }
   visitLiteral(expr: Expr.Literal): string {
     if (expr.type === BaseType.Char){
       return "#" + expr.literal.toString();

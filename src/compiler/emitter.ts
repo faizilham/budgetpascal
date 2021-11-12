@@ -242,21 +242,15 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         );
       }
 
-      case TokenTag.DIV:
-        return this.wasm.i32.div_s(left, right);
-
-      case TokenTag.MOD:
-        return this.wasm.i32.rem_s(left, right);
+      case TokenTag.DIV: return this.wasm.i32.div_s(left, right);
+      case TokenTag.MOD: return this.wasm.i32.rem_s(left, right);
 
       /* Bitwise and Logic */
-      case TokenTag.XOR:
-        return this.wasm.i32.xor(left, right);
-
-      case TokenTag.SHL:
-        return this.wasm.i32.shl(left, right);
-
-      case TokenTag.SHR:
-        return this.wasm.i32.shr_s(left, right);
+      case TokenTag.AND: return this.wasm.i32.and(left, right);
+      case TokenTag.OR : return this.wasm.i32.or(left, right);
+      case TokenTag.XOR: return this.wasm.i32.xor(left, right);
+      case TokenTag.SHL: return this.wasm.i32.shl(left, right);
+      case TokenTag.SHR: return this.wasm.i32.shr_s(left, right);
 
       /* Comparison */
 
@@ -331,6 +325,23 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   private intoReal(expr: Expr, instr: number): number {
     if (expr.type === BaseType.Real) return instr;
     return this.wasm.f64.convert_s.i32(instr);
+  }
+
+  visitShortCircuit(expr: Expr.ShortCircuit): number {
+    const left = expr.a.accept(this);
+    const right = expr.b.accept(this);
+
+    let ifTrue, ifFalse
+
+    if (expr.operator.tag === TokenTag.AND) {
+      ifTrue = right;
+      ifFalse = this.wasm.i32.const(0);
+    } else { // TokenTag.OR
+      ifTrue = this.wasm.i32.const(1);
+      ifFalse = right;
+    }
+
+    return this.wasm.if(left, ifTrue, ifFalse);
   }
 
   visitLiteral(expr: Expr.Literal): number {

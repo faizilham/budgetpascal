@@ -32,4 +32,13 @@ begin
   r := 6 * (8 - 1);
   r /= x;
   writeln(r);
+
+  writeln(12 and 27, 16 or 32);
+
+  writeln( (1 = 1) and (2 < 3));
+  writeln( (1 > 1) and (2 < 3));
+  writeln( (1 = 1) and (2 > 3));
+  writeln( (1 = 1) or (2 > 3));
+  writeln( (1 < 1) or (2 > 3));
+  writeln( (1 < 1) or (2 <> 3));
 end.
