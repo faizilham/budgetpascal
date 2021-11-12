@@ -73,8 +73,8 @@ export class Parser {
   private declarations() {
     while(!this.check(TokenTag.BEGIN)) {
       switch(this.current.tag) {
-        case TokenTag.CONST: this.constDeclaration(); break;
-        case TokenTag.VAR: this.varDeclaration(); break;
+        case TokenTag.CONST: this.constPart(); break;
+        case TokenTag.VAR: this.varPart(); break;
         default:
           throw this.errorAtCurrent(`Unknown declaration ${this.current.lexeme}`);
       }
@@ -82,77 +82,112 @@ export class Parser {
     }
   }
 
-  private constDeclaration() {
+  private constPart() {
     this.advance();
     do {
-      this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
-      const name = this.previous.lexeme;
-      this.consume(TokenTag.EQUAL, "Expect '=' after identifer.");
-
-      let value;
-      switch(this.current.tag) {
-        // TODO: case STRING
-        case TokenTag.CHAR:
-        case TokenTag.INTEGER:
-        case TokenTag.REAL:
-        case TokenTag.TRUE:
-        case TokenTag.FALSE:
-          value = this.advance();
-        break;
-        default:
-          throw this.errorAtCurrent("Expect literal value after '='.");
+      try {
+        this.constDeclaration();
+      } catch (e: any) {
+        if (e instanceof ParserError) {
+          this.reportError(e);
+          this.synchronizeVarConst();
+        } else {
+          throw e;
+        }
       }
+    } while (this.check(TokenTag.IDENTIFIER));
+  }
 
-      this.consume(TokenTag.SEMICOLON, "Expect ';' after value.");
-      const result = this.currentRoutine.identifiers.addConst(name, value);
-      if (!result) {
-        // report error but try to continue parsing
-        this.reportError(
-          this.errorAtCurrent(`Identifier '${name}' is already used in this scope.`)
-        );
+  private constDeclaration() {
+    this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
+    const name = this.previous;
+    this.consume(TokenTag.EQUAL, "Expect '=' after identifer.");
+
+    let value;
+    switch(this.current.tag) {
+      // TODO: case STRING
+      case TokenTag.CHAR:
+      case TokenTag.INTEGER:
+      case TokenTag.REAL:
+      case TokenTag.TRUE:
+      case TokenTag.FALSE:
+        value = this.advance();
+      break;
+      default:
+        throw this.errorAtCurrent("Expect literal value after '='.");
+    }
+
+    this.consume(TokenTag.SEMICOLON, "Expect ';' after value.");
+    const result = this.currentRoutine.identifiers.addConst(name.lexeme, value);
+    if (!result) {
+      throw this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`);
+    }
+  }
+
+  private varPart() {
+    this.advance();
+    do {
+      try {
+        this.varDeclaration();
+      } catch (e: any) {
+        if (e instanceof ParserError) {
+          this.reportError(e);
+          this.synchronizeVarConst();
+        } else {
+          throw e;
+        }
       }
-
     } while (this.check(TokenTag.IDENTIFIER));
   }
 
   private varDeclaration() {
-    this.advance();
+    const names: Token[] = [];
     do {
-      const names: string[] = [];
+      this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
+      names.push(this.previous);
+      if (!this.match(TokenTag.COMMA)) break;
+    } while (this.check(TokenTag.IDENTIFIER));
 
-      do {
-        this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
-        names.push(this.previous.lexeme);
-        if (!this.match(TokenTag.COMMA)) break;
-      } while (this.check(TokenTag.IDENTIFIER));
+    this.consume(TokenTag.COLON, "Expect ':' after variable name.");
+    this.consume(TokenTag.IDENTIFIER, "Expect type name.");
+    const typeName = this.previous.lexeme;
 
-      this.consume(TokenTag.COLON, "Expect ':' after variable name.");
-      this.consume(TokenTag.IDENTIFIER, "Expect type name.");
-      const typeName = this.previous.lexeme;
+    this.consume(TokenTag.SEMICOLON, "Expect ';' after declaration.");
 
-      this.consume(TokenTag.SEMICOLON, "Expect ';' after declaration.");
+    const type = this.currentRoutine.findType(typeName);
+    if (type == null) {
+      throw this.errorAtCurrent(`Unknown type '${typeName}'.`);
+    }
 
-      const type = this.currentRoutine.findType(typeName);
-      if (type == null) {
-        // report error but try to continue parsing
+    for (let name of names) {
+      const entry = this.currentRoutine.identifiers.addVariable(name.lexeme, type);
+      if (!entry) {
         this.reportError(
-          this.errorAtCurrent(`Unknown type '${typeName}'.`)
+          this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`)
         );
         continue;
       }
+      this.currentRoutine.declarations.push(new Decl.Variable(entry));
+    }
+  }
 
-      for (let name of names) {
-        const entry = this.currentRoutine.identifiers.addVariable(name, type);
-        if (!entry) {
-          this.reportError(
-            this.errorAtCurrent(`Identifier '${name}' is already used in this scope.`)
-          );
-          continue;
-        }
-        this.currentRoutine.declarations.push(new Decl.Variable(entry));
+  private synchronizeVarConst() {
+    while(this.current.tag !== TokenTag.EOF) {
+      if (this.previous.tag === TokenTag.SEMICOLON) return;
+
+      switch(this.current.tag) {
+        case TokenTag.IDENTIFIER:
+        case TokenTag.VAR:
+        case TokenTag.CONST:
+        case TokenTag.PROCEDURE:
+        case TokenTag.FUNCTION:
+        case TokenTag.TYPE:
+        case TokenTag.BEGIN:
+          return;
+        default:
+          this.advance();
       }
-
-    } while (this.check(TokenTag.IDENTIFIER));
+    }
   }
 
   /** Statement **/
@@ -179,15 +214,10 @@ export class Parser {
 
       switch(this.current.tag) {
         case TokenTag.IF:
-        case TokenTag.THEN:
-        case TokenTag.ELSE:
+        case TokenTag.CASE:
         case TokenTag.FOR:
-        case TokenTag.TO:
-        case TokenTag.DOWNTO:
-        case TokenTag.DO:
         case TokenTag.WHILE:
         case TokenTag.REPEAT:
-        case TokenTag.UNTIL:
         case TokenTag.BEGIN:
         case TokenTag.END:
         case TokenTag.WRITE:

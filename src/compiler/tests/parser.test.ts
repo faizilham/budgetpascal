@@ -28,4 +28,5 @@ const runTest = async (testname: string) => {
 describe("Parser error test", () => {
   it ('Generate syntax error report', async () => runTest("syntax_err"));
   it ('Generate typing error report', async () => runTest("type_err"));
+  it ('Generate declaration error report', async () => runTest("declaration_err"));
 });

@@ -1,0 +1,5 @@
+Error on line 4 col 9: Unknown symbol @
+Error on line 5 col 10: Expect literal value after '='.
+Error on line 7 col 3: Identifier 'def' is already declared in this scope.
+Error on line 11 col 3: Unknown type 'unknown'.
+Error on line 12 col 3: Identifier 'a' is already declared in this scope.
