@@ -24,7 +24,7 @@ integer real char string
 
 true false
 
-124 24.53 3e-2   2.5e+3+
+124 24.53 3e-2   2.5e+3+ 10..100
 24. 32e
 
 # #120 #255 #256

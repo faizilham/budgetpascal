@@ -34,11 +34,6 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     return result.join("\n");
   }
 
-  visitCaseStmt(stmt: Stmt.CaseStmt): string {
-    // TODO:
-    throw new Error("Method not implemented.");
-  }
-
   visitIfElse(stmt: Stmt.IfElse): string {
     let results = [];
 

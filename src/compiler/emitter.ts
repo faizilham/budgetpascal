@@ -160,11 +160,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     }
   }
 
-  visitCaseStmt(stmt: Stmt.CaseStmt): void {
-    // TODO:
-    throw new Error("Method not implemented.");
-  }
-
   visitIfElse(stmt: Stmt.IfElse) {
     let condition = stmt.condition.accept(this);
 

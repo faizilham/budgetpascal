@@ -1,6 +1,7 @@
+import { assert } from "console";
 import { threadId } from "worker_threads";
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isDiscrete, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
 import { Decl, IdentifierType, Program, Routine, Stmt } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
@@ -88,19 +89,8 @@ export class Parser {
     const name = this.previous;
     this.consume(TokenTag.EQUAL, "Expect '=' after identifer.");
 
-    let value;
-    switch(this.current.tag) {
-      // TODO: case STRING
-      case TokenTag.CHAR:
-      case TokenTag.INTEGER:
-      case TokenTag.REAL:
-      case TokenTag.TRUE:
-      case TokenTag.FALSE:
-        value = this.advance();
-      break;
-      default:
-        throw this.errorAtCurrent("Expect literal value after '='.");
-    }
+    this.consumeLiteral("Expect literal value after '='.");
+    let value = this.previous;
 
     this.consume(TokenTag.SEMICOLON, "Expect ';' after value.");
     const result = this.currentRoutine.identifiers.addConst(name.lexeme, value);
@@ -177,27 +167,31 @@ export class Parser {
 
   /** Statement **/
   private statement(): Stmt {
+    let result;
     switch(this.current.tag) {
-      case TokenTag.BEGIN: return this.compound();
-      case TokenTag.IF: return this.ifElse();
+      case TokenTag.BEGIN: result = this.compound(); break;
+      case TokenTag.CASE: result = this.caseStmt(); break;
+      case TokenTag.IF: result = this.ifElse(); break;
 
       case TokenTag.WRITE:
       case TokenTag.WRITELN:
-        return this.writeStmt();
+        result = this.writeStmt();
+      break;
 
-      case TokenTag.IDENTIFIER:
-        return this.identifierStmt();
+      case TokenTag.IDENTIFIER: result = this.identifierStmt(); break;
 
       default:
         // TODO: defaulted to ?
         throw this.errorAtCurrent("Expect statement");
     }
+
+    this.match(TokenTag.SEMICOLON);
+
+    return result;
   }
 
   private synchronizeStatement() {
     while(this.current.tag !== TokenTag.EOF) {
-      if (this.previous.tag === TokenTag.SEMICOLON) return;
-
       switch(this.current.tag) {
         case TokenTag.IF:
         case TokenTag.CASE:
@@ -214,6 +208,8 @@ export class Parser {
         default:
           this.advance();
       }
+
+      if (this.previous.tag === TokenTag.SEMICOLON) return;
     }
   }
 
@@ -226,8 +222,9 @@ export class Parser {
       try {
         statements.push(this.statement());
 
-        if (!this.check(TokenTag.EOF) && !this.check(TokenTag.END)) {
-          this.consume(TokenTag.SEMICOLON, "Expect ';' between statements.");
+        if (!this.check(TokenTag.EOF) && !this.check(TokenTag.END) &&
+            this.previous.tag !== TokenTag.SEMICOLON) {
+           throw this.errorAtCurrent("Expect ';' between statements.");
         }
       } catch(e) {
         if (e instanceof ParserError) {
@@ -244,6 +241,100 @@ export class Parser {
     return new Stmt.Compound(statements);
   }
 
+  private caseStmt(): Stmt {
+    this.advance();
+    const checkValue = this.expression();
+    this.consume(TokenTag.OF, "Expect 'of' after expression.");
+    const type = checkValue.type as PascalType;
+    const tempVar = new Expr.Variable(this.currentRoutine.identifiers.addTempVariable(type));
+
+    let initVarStmt = new Stmt.SetVariable(tempVar, checkValue);
+    let root: Stmt.IfElse | null = null;
+    let lastParent: Stmt.IfElse | null = null;
+
+    while (!this.check(TokenTag.ELSE) && !this.check(TokenTag.END) && !this.check(TokenTag.EOF)) {
+      const casePart = this.caseMatch(tempVar);
+      if (!lastParent) {
+        lastParent = casePart;
+        root = lastParent;
+      } else {
+        lastParent.elseBody = casePart;
+        lastParent = casePart;
+      }
+    }
+
+    if (this.match(TokenTag.ELSE)) {
+      const statements = [];
+      while(!this.check(TokenTag.END) && !this.check(TokenTag.EOF)) {
+        statements.push(this.statement());
+
+        if (!this.check(TokenTag.EOF) && !this.check(TokenTag.END) &&
+            this.previous.tag !== TokenTag.SEMICOLON) {
+           throw this.errorAtCurrent("Expect ';' between statements.");
+        }
+      }
+      const compound = new Stmt.Compound(statements);
+      (lastParent as Stmt.IfElse).elseBody = compound;
+    }
+
+    this.consume(TokenTag.END, "Expect 'end' after case statement.");
+
+    return new Stmt.Compound([
+      initVarStmt,
+      root as Stmt.IfElse
+    ]);
+  }
+
+  private caseMatch(tempVar: Expr.Variable): Stmt.IfElse {
+    let caseCondition;
+    do {
+      const orOperator = this.previous.copy();
+      orOperator.tag = TokenTag.OR;
+
+      let matchExpr = this.caseMatchCondition(tempVar);
+      if (!caseCondition) {
+        caseCondition = matchExpr;
+      } else {
+        caseCondition = this.binary(caseCondition, orOperator, matchExpr);
+      }
+    } while(this.match(TokenTag.COMMA));
+
+    this.consume(TokenTag.COLON, "Expect ':'.");
+    const branchStmt = this.statement();
+
+    return new Stmt.IfElse(caseCondition, branchStmt);
+  }
+
+  private caseMatchCondition(tempVar: Expr.Variable): Expr {
+    this.consumeLiteral("Expect literal value.");
+    let startToken = this.previous;
+    let startVal = this.literals(startToken);
+
+    if (!this.match(TokenTag.RANGE)) {
+      const operator = new Token(TokenTag.EQUAL, "=", startToken.line, startToken.column);
+      return this.binary(tempVar, operator, startVal)
+    }
+
+    if (!isDiscrete(startVal.type)) {
+      throw this.errorAtPrevious("Invalid range expression.");
+    }
+
+    this.consumeLiteral("Expect literal value after '..'.");
+    let endToken = this.previous;
+    let endVal = this.literals(endToken);
+
+    if (!isTypeEqual(startVal.type, endVal.type)) {
+      throw this.errorAtPrevious("Invalid range expression.");
+    }
+
+    let operator = new Token(TokenTag.LESS_EQ, "<=", startToken.line, startToken.column);
+    const startCheck = this.binary(startVal, operator, tempVar);
+    const endCheck = this.binary(tempVar, operator, endVal);
+
+    operator = new Token(TokenTag.AND, "and", startToken.line, startToken.column);
+    return this.binary(startCheck, operator, endCheck);
+  }
+
   private ifElse(): Stmt {
     this.advance();
     const conditionStart = this.current;
@@ -254,7 +345,7 @@ export class Parser {
         `Condition type must be boolean instead of ${getTypeName(condition.type)}`);
     }
 
-    this.consume(TokenTag.THEN, "Expect 'then' after condition");
+    this.consume(TokenTag.THEN, "Expect 'then' after condition.");
 
     let body;
     if (!this.check(TokenTag.ELSE)){
@@ -609,10 +700,27 @@ export class Parser {
     return true;
   }
 
-  private consume(type: TokenTag, errMessage: string) {
-    if (!this.match(type)){
+  private consume(tag: TokenTag, errMessage: string) {
+    if (!this.match(tag)){
       throw this.errorAtCurrent(errMessage);
     }
+  }
+
+  private consumeAny(tags: TokenTag[], errMessage: string) {
+    for (let tag of tags) {
+      if (this.match(tag)) {
+        return;
+      }
+    }
+
+    throw this.errorAtCurrent(errMessage);
+  }
+
+  private consumeLiteral(errMessage: string) {
+    this.consumeAny(
+      [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.REAL, TokenTag.TRUE, TokenTag.FALSE],
+      errMessage);
+    // TODO: string?
   }
 
   private errorAtCurrent(message: string) {

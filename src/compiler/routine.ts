@@ -56,6 +56,7 @@ export interface ConstantEntry {
 
 export class IdentifierTable {
   table: {[key: string]: IdentifierEntry}
+  tempVarCount: number = 0;
 
   constructor() {
     this.table = {};
@@ -76,6 +77,21 @@ export class IdentifierTable {
     }
     this.table[name] = entry;
 
+    return entry;
+  }
+
+  public addTempVariable(type: PascalType): VariableEntry {
+    const tempIndex = this.tempVarCount++;
+    const name = `tempvar::${tempIndex}`;
+    const entry: VariableEntry = {
+      entryType: IdentifierType.Variable,
+      name,
+      type,
+      index: 0, // will be set by emitter
+      initialized: false,
+      level: VariableLevel.LOCAL
+    }
+    this.table[name] = entry;
     return entry;
   }
 
@@ -135,27 +151,6 @@ export namespace Stmt {
     }
   }
 
-  export class CaseStmt extends Stmt {
-    public checkValue: Expr
-    public branches: Stmt[] = []
-    public constants: Array<number | Range> = []
-    public elseBranch?: Stmt
-
-    constructor(checkValue: Expr) {
-      super();
-      this.checkValue = checkValue;
-    }
-
-    addCase(constant: number | Range, branch: Stmt) {
-      this.constants.push(constant);
-      this.branches.push(branch);
-    }
-
-    public accept<T>(visitor: Visitor<T>): T {
-      return visitor.visitCaseStmt(this);
-    }
-  }
-
   export class IfElse extends Stmt {
     constructor(public condition: Expr, public body?: Stmt, public elseBody?: Stmt) {
       super();
@@ -185,7 +180,6 @@ export namespace Stmt {
 
   export interface Visitor<T> {
     visitCompound(stmt: Compound): T;
-    visitCaseStmt(stmt: CaseStmt): T;
     visitIfElse(stmt: IfElse): T;
     visitSetVariable(stmt: SetVariable): T;
     visitWrite(stmt: Write): T;

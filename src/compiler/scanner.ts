@@ -240,6 +240,13 @@ export class Scanner {
 
     let current = this.peek();
     if (current === '.') {
+      if (this.peekNext() === '.') {
+        // special case for handling range without space: 2..5
+        let token = this.makeToken(TokenTag.INTEGER);
+        token.literal = parseInt(token.lexeme, 10);
+        return token;
+      }
+
       isInteger = false;
       this.advance();
 
