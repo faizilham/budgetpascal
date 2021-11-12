@@ -180,6 +180,7 @@ export class Parser {
 
       case TokenTag.CASE: result = this.caseStmt(); break;
       case TokenTag.IF: result = this.ifElse(); break;
+      case TokenTag.REPEAT: result = this.repeatUntil(); break;
       case TokenTag.WHILE: result = this.whileDo(); break;
 
       case TokenTag.WRITE:
@@ -388,6 +389,25 @@ export class Parser {
     }
 
     return new Stmt.LoopControl(token);
+  }
+
+  private repeatUntil(): Stmt {
+    this.advance();
+
+    const statements = [];
+    while(!this.check(TokenTag.UNTIL) && !this.check(TokenTag.EOF)) {
+      statements.push(this.statement());
+
+      if (!this.check(TokenTag.UNTIL) && !this.check(TokenTag.END) &&
+          this.previous.tag !== TokenTag.SEMICOLON) {
+         throw this.errorAtCurrent("Expect ';' between statements.");
+      }
+    }
+
+    this.consume(TokenTag.UNTIL, "Expect 'until'.");
+    const finishCondition = this.expression();
+
+    return new Stmt.RepeatUntil(finishCondition, statements);
   }
 
   private whileDo(): Stmt {

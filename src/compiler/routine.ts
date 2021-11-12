@@ -168,6 +168,15 @@ export namespace Stmt {
     }
   }
 
+  export class RepeatUntil extends Stmt {
+    constructor(public finishCondition: Expr, public statements: Stmt[]) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitRepeatUntil(this);
+    }
+  }
+
   export class SetVariable extends Stmt {
     constructor(public target: Expr.Variable, public value: Expr) {
       super();
@@ -200,6 +209,7 @@ export namespace Stmt {
     visitCompound(stmt: Compound): T;
     visitIfElse(stmt: IfElse): T;
     visitLoopControl(stmt: LoopControl): T;
+    visitRepeatUntil(stmt: RepeatUntil): T;
     visitSetVariable(stmt: SetVariable): T;
     visitWhileDo(stmt: WhileDo): T;
     visitWrite(stmt: Write): T;

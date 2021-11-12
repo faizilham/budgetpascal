@@ -207,6 +207,33 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.currentBlock.push(instr);
   }
 
+  visitRepeatUntil(stmt: Stmt.RepeatUntil) {
+    const prevLoop = this.currentLoop;
+    this.currentLoop = this.addLoop();
+
+    this.startBlock();
+    const loopLabel = this.getLoopLabel();
+    const outerLabel = this.getOuterLoopLabel();
+
+    for (const s of stmt.statements) {
+      s.accept(this);
+    }
+
+    const finishCondition = stmt.finishCondition.accept(this);
+    this.currentBlock.push(
+      this.wasm.br_if(outerLabel, finishCondition)
+    );
+
+    this.currentBlock.push(
+      this.wasm.br(loopLabel)
+    );
+
+    const loopblock = this.endBlock(loopLabel, true);
+    const outerblock = this.wasm.block(outerLabel, [loopblock]);
+    this.currentBlock.push(outerblock);
+    this.currentLoop = prevLoop;
+  }
+
   visitSetVariable(stmt: Stmt.SetVariable) {
     const entry = stmt.target.entry;
     let exprInstr = stmt.value.accept(this);

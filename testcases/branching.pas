@@ -38,7 +38,7 @@ begin
   end;
 
   a := 1;
-  while a <= 12 do begin
+  repeat
     case a of
       5, 6: writeln(56);
       1, 7..9:
@@ -53,7 +53,7 @@ begin
       writeln(a);
     end;
     a += 1;
-  end;
+  until a = 12;
 
   c := #97;
   case c of

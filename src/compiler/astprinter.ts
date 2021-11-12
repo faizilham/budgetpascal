@@ -7,7 +7,6 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
   constructor(public root: Program) {
     this.tab = 0;
   }
-
   print(): string {
     if (!this.root.body) return "<error>";
 
@@ -59,6 +58,11 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
 
   visitLoopControl(stmt: Stmt.LoopControl): string {
     return this.tabbed(stmt.token.lexeme);
+  }
+
+  visitRepeatUntil(stmt: Stmt.RepeatUntil): string {
+    //TODO:
+    throw new Error("Method not implemented.");
   }
 
   visitWhileDo(stmt: Stmt.WhileDo): string {
