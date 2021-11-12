@@ -179,6 +179,7 @@ export class Parser {
   private statement(): Stmt {
     switch(this.current.tag) {
       case TokenTag.BEGIN: return this.compound();
+      case TokenTag.IF: return this.ifElse();
 
       case TokenTag.WRITE:
       case TokenTag.WRITELN:
@@ -243,6 +244,31 @@ export class Parser {
     return new Stmt.Compound(statements);
   }
 
+  private ifElse(): Stmt {
+    this.advance();
+    const conditionStart = this.current;
+    const condition = this.expression();
+
+    if (condition.type !== BaseType.Boolean) {
+      throw this.errorAt(conditionStart,
+        `Condition type must be boolean instead of ${getTypeName(condition.type)}`);
+    }
+
+    this.consume(TokenTag.THEN, "Expect 'then' after condition");
+
+    let body;
+    if (!this.check(TokenTag.ELSE)){
+      body = this.statement();
+    }
+
+    let elseBody;
+    if (this.match(TokenTag.ELSE)) {
+      elseBody = this.statement();
+    }
+
+    return new Stmt.IfElse(condition, body, elseBody);
+  }
+
   private writeStmt(): Stmt {
     this.advance();
     const newline = this.previous.tag === TokenTag.WRITELN;
@@ -265,6 +291,14 @@ export class Parser {
     }
 
     return new Stmt.Write(outputs, newline);
+  }
+
+  private isPrintable(type?: PascalType): boolean {
+    if (!type) return false;
+
+    // TODO: add string type
+    return type === BaseType.Boolean || type === BaseType.Char ||
+      type === BaseType.Integer || type === BaseType.Real;
   }
 
   private identifierStmt(): Stmt {
@@ -316,14 +350,6 @@ export class Parser {
     const target = left as Expr.GlobalVar;
 
     return new Stmt.SetGlobalVar(target, right);
-  }
-
-  private isPrintable(type?: PascalType): boolean {
-    if (!type) return false;
-
-    // TODO: add string type
-    return type === BaseType.Boolean || type === BaseType.Char ||
-      type === BaseType.Integer || type === BaseType.Real;
   }
 
   /** Expression Parsing **/

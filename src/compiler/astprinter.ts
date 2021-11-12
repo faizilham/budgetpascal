@@ -34,6 +34,29 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     return result.join("\n");
   }
 
+  visitIfElse(stmt: Stmt.IfElse): string {
+    let results = [];
+
+    results.push(this.tabbed(`if ${stmt.condition.accept(this)}:`));
+
+    this.tab++;
+    if (!stmt.body) {
+      results.push(this.tabbed("<empty>"));
+    } else {
+      results.push(stmt.body.accept(this));
+    }
+    this.tab--;
+
+    if (stmt.elseBody) {
+      results.push(this.tabbed("else:"));
+      this.tab++;
+      results.push(stmt.elseBody.accept(this));
+      this.tab--;
+    }
+
+    return results.join("\n");
+  }
+
   visitWrite(stmt: Stmt.Write): string {
     let results = ["write"];
     if (stmt.newline) results[0] += "ln";

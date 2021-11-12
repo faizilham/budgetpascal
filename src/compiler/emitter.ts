@@ -9,12 +9,14 @@ const PUTINT_MODE_CHAR = 1;
 const PUTINT_MODE_BOOL = 2;
 
 export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.Visitor<void> {
-  public wasm: binaryen.Module;
-  public currentBlock: number[];
+  private wasm: binaryen.Module;
+  private currentBlock: number[];
+  private prevBlocks: number[][];
 
-  constructor(public program: Program) {
+  constructor(private program: Program) {
     this.wasm = new binaryen.Module();
     this.currentBlock = [];
+    this.prevBlocks = [];
   }
 
   emit(optimize: boolean = true): Uint8Array {
@@ -83,13 +85,26 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
   /* Statements */
   visitCompound(stmt: Stmt.Compound) {
-    let prevBlock = this.currentBlock;
-    this.currentBlock = [];
+    this.startBlock();
 
     this.flattenCompound(this.currentBlock, stmt);
-    const block = this.wasm.block("", this.currentBlock);
-    this.currentBlock = prevBlock;
-    prevBlock.push(block);
+    const block = this.endBlock();
+    this.currentBlock.push(block);
+  }
+
+  private startBlock() {
+    this.prevBlocks.push(this.currentBlock);
+    this.currentBlock = [];
+  }
+
+  private endBlock(blockname: string = ""): number {
+    const block = this.wasm.block(blockname, this.currentBlock);
+    const prev = this.prevBlocks.pop();
+
+    if (!prev) throw new Error("No previous block to return to");
+
+    this.currentBlock = prev;
+    return block;
   }
 
   private flattenCompound(children: number[], stmt: Stmt.Compound) {
@@ -102,7 +117,37 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     }
   }
 
-  visitSetGlobalVar(stmt: Stmt.SetGlobalVar): void {
+  visitIfElse(stmt: Stmt.IfElse) {
+    let condition = stmt.condition.accept(this);
+
+    let ifTrue, ifFalse;
+
+    if (stmt.body) {
+      this.startBlock();
+      stmt.body.accept(this);
+      ifTrue = this.endBlock();
+
+      if (stmt.elseBody) {
+        this.startBlock();
+        stmt.elseBody.accept(this);
+        ifFalse = this.endBlock();
+      }
+    } else {
+      if (!stmt.elseBody) throw new UnreachableErr("If-Else with empty body in both cases");
+
+      condition = this.wasm.i32.eqz(condition);
+      this.startBlock();
+      stmt.elseBody.accept(this);
+      ifTrue = this.endBlock();
+    }
+
+    this.currentBlock.push(
+      this.wasm.if(condition, ifTrue, ifFalse)
+    );
+  }
+
+
+  visitSetGlobalVar(stmt: Stmt.SetGlobalVar) {
     let exprInstr = stmt.value.accept(this);
 
 

@@ -6,7 +6,7 @@ import { ErrLogger } from "./compiler/errors";
 
 const debugWasm = true;
 
-const filename = "testcases/basic_expression.pas";
+const filename = "testcases/branching.pas";
 // const filename = "testcases/errors/declaration_err.pas";
 const data = fs.readFileSync(filename).toString();
 

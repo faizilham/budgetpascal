@@ -139,6 +139,15 @@ export namespace Stmt {
     }
   }
 
+  export class IfElse extends Stmt {
+    constructor(public condition: Expr, public body?: Stmt, public elseBody?: Stmt) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitIfElse(this);
+    }
+  }
+
   export class SetGlobalVar extends Stmt {
     constructor(public target: Expr.GlobalVar, public value: Expr) {
       super();
@@ -159,6 +168,7 @@ export namespace Stmt {
 
   export interface Visitor<T> {
     visitCompound(stmt: Compound): T;
+    visitIfElse(stmt: IfElse): T;
     visitSetGlobalVar(stmt: SetGlobalVar): T;
     visitWrite(stmt: Write): T;
   }
