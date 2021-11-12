@@ -57,6 +57,15 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     return results.join("\n");
   }
 
+  visitLoopControl(stmt: Stmt.LoopControl): string {
+    return this.tabbed(stmt.token.lexeme);
+  }
+
+  visitWhileDo(stmt: Stmt.WhileDo): string {
+    //TODO:
+    throw new Error("Method not implemented.");
+  }
+
   visitWrite(stmt: Stmt.Write): string {
     let results = ["write"];
     if (stmt.newline) results[0] += "ln";

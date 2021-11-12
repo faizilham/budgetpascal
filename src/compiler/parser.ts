@@ -1,7 +1,7 @@
 import { assert } from "console";
 import { threadId } from "worker_threads";
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isDiscrete, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
 import { Decl, IdentifierType, Program, Routine, Stmt } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
@@ -13,6 +13,7 @@ export class Parser {
   hasError: boolean;
   currentRoutine: Routine;
   logger: ErrLogger.Reporter;
+  loopLevel: number;
 
   constructor(public text: string, logger?: ErrLogger.Reporter) {
     this.precedenceRule = this.buildPrecedence();
@@ -23,6 +24,7 @@ export class Parser {
     this.hasError = false;
     this.currentRoutine = new Program("");
     this.logger = logger || ErrLogger.logger;
+    this.loopLevel = 0;
   }
 
   parse(): Program | undefined  {
@@ -170,8 +172,15 @@ export class Parser {
     let result;
     switch(this.current.tag) {
       case TokenTag.BEGIN: result = this.compound(); break;
+
+      case TokenTag.BREAK:
+      case TokenTag.CONTINUE:
+        result = this.loopControl();
+      break;
+
       case TokenTag.CASE: result = this.caseStmt(); break;
       case TokenTag.IF: result = this.ifElse(); break;
+      case TokenTag.WHILE: result = this.whileDo(); break;
 
       case TokenTag.WRITE:
       case TokenTag.WRITELN:
@@ -204,6 +213,8 @@ export class Parser {
         case TokenTag.WRITELN:
         case TokenTag.READ:
         case TokenTag.READLN:
+        case TokenTag.BREAK:
+        case TokenTag.CONTINUE:
           return;
         default:
           this.advance();
@@ -243,9 +254,15 @@ export class Parser {
 
   private caseStmt(): Stmt {
     this.advance();
+    const exprStart = this.current;
     const checkValue = this.expression();
     this.consume(TokenTag.OF, "Expect 'of' after expression.");
     const type = checkValue.type as PascalType;
+
+    if (!isOrdinal(type)) {
+      throw this.errorAt(exprStart, "Expected expression with ordinal type.");
+    }
+
     const tempVar = new Expr.Variable(this.currentRoutine.identifiers.addTempVariable(type));
 
     let initVarStmt = new Stmt.SetVariable(tempVar, checkValue);
@@ -315,7 +332,7 @@ export class Parser {
       return this.binary(tempVar, operator, startVal)
     }
 
-    if (!isDiscrete(startVal.type)) {
+    if (!isOrdinal(startVal.type)) {
       throw this.errorAtPrevious("Invalid range expression.");
     }
 
@@ -357,7 +374,41 @@ export class Parser {
       elseBody = this.statement();
     }
 
+    if (!body && !elseBody) {
+      throw this.errorAtCurrent("Expect statement in if statement.");
+    }
+
     return new Stmt.IfElse(condition, body, elseBody);
+  }
+
+  private loopControl(): Stmt {
+    const token = this.advance();
+    if (this.loopLevel === 0) {
+      throw this.errorAtPrevious(`Can't use statement '${token.lexeme}' outside of loop`);
+    }
+
+    return new Stmt.LoopControl(token);
+  }
+
+  private whileDo(): Stmt {
+    this.advance();
+    const conditionStart = this.current;
+    const condition = this.expression();
+
+    if (condition.type !== BaseType.Boolean) {
+      throw this.errorAt(conditionStart,
+        `Condition type must be boolean instead of ${getTypeName(condition.type)}`);
+    }
+
+    this.consume(TokenTag.DO, "Expect 'do' after condition.");
+
+    try {
+      this.loopLevel++;
+      const body = this.statement();
+      return new Stmt.WhileDo(condition, body);
+    } finally {
+      this.loopLevel--;
+    }
   }
 
   private writeStmt(): Stmt {

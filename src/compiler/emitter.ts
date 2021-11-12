@@ -24,11 +24,15 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   private currentBlock: number[];
   private prevBlocks: number[][];
   private currentContext?: Context;
+  private currentLoop: number;
+  private loopCount: number;
 
   constructor(private program: Program) {
     this.wasm = new binaryen.Module();
     this.currentBlock = [];
     this.prevBlocks = [];
+    this.currentLoop = 0;
+    this.loopCount = 0;
   }
 
   emit(optimize: boolean = true): Uint8Array {
@@ -36,13 +40,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     return this.wasm.emitBinary();
   }
 
-  buildProgram(optimize: boolean) {
+  private buildProgram(optimize: boolean) {
     // init module
     if (!this.program.body) {
       throw new Error("Panic: null program body");
     }
-
-    this.addImports();
 
     this.startContext(this.program);
     this.buildDeclarations(this.program);
@@ -56,10 +58,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.wasm.addFunctionExport("main", "main");
     this.wasm.setStart(main);
 
-    // console.log(this.wasm.emitText());
+    this.addImports();
 
     if (optimize) this.wasm.optimize();
     if (!this.wasm.validate()) {
+      console.error(this.wasm.emitText());
       throw new Error("Panic: invalid wasm");
     }
   }
@@ -140,8 +143,13 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.currentBlock = [];
   }
 
-  private endBlock(blockname: string = ""): number {
-    const block = this.wasm.block(blockname, this.currentBlock);
+  private endBlock(blockname: string = "", isLoop = false): number {
+    let block;
+    if (isLoop) {
+      block = this.wasm.loop(blockname, this.wasm.block("", this.currentBlock));
+    } else {
+      block = this.wasm.block(blockname, this.currentBlock);
+    }
     const prev = this.prevBlocks.pop();
 
     if (!prev) throw new Error("No previous block to return to");
@@ -189,6 +197,15 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     );
   }
 
+  visitLoopControl(stmt: Stmt.LoopControl) {
+    let instr;
+    if (stmt.token.tag === TokenTag.BREAK) {
+      instr = this.wasm.br(this.getOuterLoopLabel());
+    } else { // TokenTag.CONTINUE
+      instr = this.wasm.br(this.getLoopLabel());
+    }
+    this.currentBlock.push(instr);
+  }
 
   visitSetVariable(stmt: Stmt.SetVariable) {
     const entry = stmt.target.entry;
@@ -216,6 +233,32 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     }
 
     this.currentBlock.push(instr);
+  }
+
+  visitWhileDo(stmt: Stmt.WhileDo)  {
+    const prevLoop = this.currentLoop;
+    this.currentLoop = this.addLoop();
+
+    this.startBlock();
+    let condition = stmt.condition.accept(this);
+    const loopLabel = this.getLoopLabel();
+    const outerLabel = this.getOuterLoopLabel();
+
+    this.currentBlock.push(
+      this.wasm.br_if(outerLabel, this.wasm.i32.eqz(condition))
+    );
+
+    stmt.body.accept(this);
+
+    this.currentBlock.push(
+      this.wasm.br(loopLabel)
+    );
+
+    const loopblock = this.endBlock(loopLabel, true);
+    const outerblock = this.wasm.block(outerLabel, [loopblock]);
+    this.currentBlock.push(outerblock);
+
+    this.currentLoop = prevLoop;
   }
 
   visitWrite(stmt: Stmt.Write) {
@@ -251,6 +294,18 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         this.wasm.call("putln", [], binaryen.none)
       );
     }
+  }
+
+  private addLoop() {
+    return this.loopCount++;
+  }
+
+  private getLoopLabel() {
+    return "L" + this.currentLoop;
+  }
+
+  private getOuterLoopLabel() {
+    return "OL" + this.currentLoop;
   }
 
   /* Expressions */

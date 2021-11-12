@@ -160,12 +160,30 @@ export namespace Stmt {
     }
   }
 
+  export class LoopControl extends Stmt {
+    constructor(public token: Token){ super(); }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitLoopControl(this);
+    }
+  }
+
   export class SetVariable extends Stmt {
     constructor(public target: Expr.Variable, public value: Expr) {
       super();
     }
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitSetVariable(this);
+    }
+  }
+
+  export class WhileDo extends Stmt {
+    constructor(public condition: Expr, public body: Stmt) {
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitWhileDo(this);
     }
   }
 
@@ -181,7 +199,9 @@ export namespace Stmt {
   export interface Visitor<T> {
     visitCompound(stmt: Compound): T;
     visitIfElse(stmt: IfElse): T;
+    visitLoopControl(stmt: LoopControl): T;
     visitSetVariable(stmt: SetVariable): T;
+    visitWhileDo(stmt: WhileDo): T;
     visitWrite(stmt: Write): T;
   }
 }

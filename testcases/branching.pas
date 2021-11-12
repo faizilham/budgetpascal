@@ -1,6 +1,6 @@
 program branching;
 var
-  a: integer;
+  a, i, j: integer;
   c: char;
 
 begin
@@ -37,19 +37,22 @@ begin
     writeln(9.5);
   end;
 
-  a := 9;
-  case a of
-    5, 6: writeln(56);
-    1, 7..9:
-      case a of
-        8: writeln(8)
-      else
-        writeln(179)
-      end
-    10..13: writeln(1013);
-  else
-    write(#97, #32);
-    writeln(a);
+  a := 1;
+  while a <= 12 do begin
+    case a of
+      5, 6: writeln(56);
+      1, 7..9:
+        case a of
+          8: writeln(8)
+        else
+          writeln(179)
+        end
+      10..13: writeln(1013);
+    else
+      write(#97, #32);
+      writeln(a);
+    end;
+    a += 1;
   end;
 
   c := #97;
@@ -57,5 +60,24 @@ begin
     #97..#99: writeln(123);
     #100..#102: writeln(456);
   end;
+
+  a := 6;
+  i := 0;
+  while i < a do begin
+    i += 1;
+    if i = 3 then continue;
+    write(i, #32);
+
+    j := 0;
+    while j < a do begin
+      j += 1;
+      if j = i then break;
+      else if j = 2 then continue;
+      write(j, #32);
+    end;
+
+    writeln;
+  end;
+
 
 end.

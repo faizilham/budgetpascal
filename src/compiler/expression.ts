@@ -16,7 +16,7 @@ export function isNumberType(type?: PascalType): boolean {
   return type === BaseType.Integer || type === BaseType.Real;
 }
 
-export function isDiscrete(type?: PascalType): boolean {
+export function isOrdinal(type?: PascalType): boolean {
   return type == BaseType.Integer || type == BaseType.Boolean || type == BaseType.Char;
 }
 
