@@ -54,7 +54,7 @@ export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
 }
 
 export function getTypeName(type?: PascalType): string {
-  if (isString(type)) return type.size < 255 ? `string[${type.size}]` : "string";
+  if (isString(type)) return type.size < 255 ? `String[${type.size}]` : "String";
   return BaseType[ type || BaseType.Void];
 }
 

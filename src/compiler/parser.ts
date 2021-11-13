@@ -130,15 +130,32 @@ export class Parser {
     } while (this.check(TokenTag.IDENTIFIER));
 
     this.consume(TokenTag.COLON, "Expect ':' after variable name.");
-    this.consume(TokenTag.IDENTIFIER, "Expect type name.");
-    const typeName = this.previous.lexeme;
+    this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE], "Expect type name.");
+    const typeName = this.previous;
+
+    let type
+    if (typeName.tag === TokenTag.STRING_TYPE) {
+      let length = 255;
+
+      if (this.match(TokenTag.LEFT_SQUARE)) {
+        this.consume(TokenTag.INTEGER, "Expect string length");
+        length = this.previous.literal as number;
+        this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
+
+        if (length > 255) {
+          throw this.errorAt(typeName, "String size can't be larger than 255.");
+        }
+      }
+
+      type = StringType.create(length);
+    } else {
+      type = this.currentRoutine.findType(typeName.lexeme);
+      if (type == null) {
+        throw this.errorAt(typeName, `Unknown type '${typeName.lexeme}'.`);
+      }
+    }
 
     this.consume(TokenTag.SEMICOLON, "Expect ';' after declaration.");
-
-    const type = this.currentRoutine.findType(typeName);
-    if (type == null) {
-      throw this.errorAtCurrent(`Unknown type '${typeName}'.`);
-    }
 
     for (let name of names) {
       const entry = this.currentRoutine.identifiers.addVariable(name.lexeme, type);

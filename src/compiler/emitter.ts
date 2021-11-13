@@ -1,7 +1,7 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isString, PascalType } from "./expression";
-import { Decl, Program, Routine, Stmt, VariableLevel } from "./routine";
+import { BaseType, Expr, getTypeName, isBool, isString, PascalType, StringType } from "./expression";
+import { Decl, Program, Routine, Stmt, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
 
@@ -54,7 +54,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.buildDeclarations(this.program);
     this.program.body.accept(this);
 
-    const body = this.currentBlock[0] as number;
+    const body = this.wasm.block("", this.currentBlock);
     const locals = this.context().locals;
     const main = this.wasm.addFunction("main", binaryen.none, binaryen.none, locals, body);
     this.endContext();
@@ -133,8 +133,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         wasmType = binaryen.f64;
         initValue = this.wasm.f64.const(0);
       break;
-      default:
-        throw new UnreachableErr(`Unknown variable type ${getTypeName(entry.type)}.`);
+      default: // other types will be pointers
+        wasmType = binaryen.i32;
+        initValue = this.wasm.i32.const(0);
+      break;
     }
 
     switch(entry.level) {
@@ -151,6 +153,25 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
       default:
         new UnreachableErr(`Unknown variable scope level ${entry.level}.`); //TODO: upper variable
     }
+
+    if (isString(entry.type)) this.addStringVar(entry, entry.type);
+  }
+
+  private addStringVar(variable: VariableEntry, str: StringType) {
+    const stackTopValue = this.runtime.stackTop()
+    const pushInstr = this.runtime.pushStack(str.size + 1);
+
+    if (variable.level === VariableLevel.GLOBAL) {
+      this.currentBlock.push(
+        this.wasm.global.set(variable.name, stackTopValue)
+      );
+    } else {
+      this.currentBlock.push(
+        this.wasm.local.set(variable.index, stackTopValue)
+      );
+    }
+
+    this.currentBlock.push(pushInstr);
   }
 
   private startContext(routine: Routine) {
@@ -345,8 +366,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
     if (stmt.target.type === BaseType.Real) {
       exprInstr = this.intoReal(stmt.value, exprInstr);
+    } else if (isString(stmt.target.type)) {
+      return this.setStringVariable(stmt, exprInstr);
     }
-    // TODO: handle string?
 
     let instr;
 
@@ -365,6 +387,30 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     }
 
     this.currentBlock.push(instr);
+  }
+
+  setStringVariable(stmt: Stmt.SetVariable, sourceExpr: number) {
+    const entry = stmt.target.entry;
+    const strType = entry.type as StringType;
+    let targetAddr;
+    switch(entry.level) {
+      case VariableLevel.GLOBAL: {
+        targetAddr = this.wasm.global.get(stmt.target.entry.name, binaryen.i32);
+        break;
+      }
+      case VariableLevel.LOCAL: {
+        targetAddr = this.wasm.local.get(entry.index, binaryen.i32);
+        break;
+      }
+      default:
+        //TODO: upper variable
+        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
+    }
+
+    const copyInstr = this.runtime.copyString(targetAddr, strType.size, sourceExpr);
+
+    // TODO: record stack then restore
+    this.currentBlock.push(copyInstr)
   }
 
   visitWhileDo(stmt: Stmt.WhileDo)  {
@@ -451,8 +497,14 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
       case BaseType.Real:
         wasmType = binaryen.f64;
       break;
-      default:
+      default:{
+        if (isString(expr.type)) {
+          wasmType = binaryen.i32;
+          break;
+        }
+
         throw new UnreachableErr(`Unknown variable type ${getTypeName(expr.type)}.`);
+      }
     }
 
     switch(entry.level) {

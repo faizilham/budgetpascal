@@ -34,8 +34,12 @@ export class RuntimeBuilder {
     this.wasm.addGlobal(Runtime.STACK_POINTER, binaryen.i32, true,
       this.wasm.i32.const(Runtime.BASE_STACK_ADDRESS));
 
+    this.wasm.setFeatures(binaryen.Features.BulkMemory);
+
     this.buildPush();
     this.buildPop();
+    this.buildCopyString();
+    this.buildAppendString();
   }
 
   buildImports() {
@@ -68,6 +72,10 @@ export class RuntimeBuilder {
     return this.wasm.call("$pop", [this.wasm.i32.const(bytes)], binaryen.none);
   }
 
+  stackTop(): number {
+    return this.wasm.global.get(Runtime.STACK_POINTER, binaryen.i32);
+  }
+
   private buildPop() {
     this.wasm.addFunction("$pop", binaryen.i32, binaryen.none, [],
       this.wasm.global.set(
@@ -77,6 +85,94 @@ export class RuntimeBuilder {
           this.wasm.local.get(0, binaryen.i32)
         )
       )
+    );
+  }
+
+  copyString(target: number, maxSize: number, source: number): number {
+    return this.wasm.call("$copyString", [target, this.wasm.i32.const(maxSize), source],
+        binaryen.none);
+  }
+
+  private buildCopyString() {
+    // params: 0 target, 1 max_size, 2 source
+    const target = 0;
+    const max_size = 1;
+    const source = 2;
+
+    const getlocal = (id: number) => this.wasm.local.get(id, binaryen.i32);
+    const setmem = (ptr: number, val: number) => this.wasm.i32.store8(0, 1, ptr, val);
+    const constant = (val: number) => this.wasm.i32.const(val);
+
+    this.wasm.addFunction("$copyString", params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.none,
+     [], this.wasm.block("", [
+       // mem[target]
+       setmem(getlocal(target), constant(0)),
+       this.wasm.call("$appendString", [getlocal(target), getlocal(max_size), getlocal(source)],
+          binaryen.none)
+     ]));
+  }
+
+  appendString(target: number, maxSize: number, source: number): number {
+    return this.wasm.call("$appendString", [target, this.wasm.i32.const(maxSize), source],
+        binaryen.none);
+  }
+
+  private buildAppendString() {
+    // params: 0 target, 1 max_size, 2 source
+
+    const target = 0;
+    const max_size = 1;
+    const source = 2;
+    const target_length = 3
+    const target_start = 4;
+    const source_length = 5;
+    const source_start = 6;
+    const remaining = 7;
+
+    const setlocal = (id: number, val: number) => this.wasm.local.set(id, val);
+    const getlocal = (id: number) => this.wasm.local.get(id, binaryen.i32);
+    const constant = (val: number) => this.wasm.i32.const(val);
+    const add = (left: number, right: number) => this.wasm.i32.add(left, right);
+    const sub = (left: number, right: number) => this.wasm.i32.sub(left, right);
+    const getmem = (ptr: number) => this.wasm.i32.load8_u(0, 1, ptr)
+    const setmem = (ptr: number, val: number) => this.wasm.i32.store8(0, 1, ptr, val);
+
+    this.wasm.addFunction("$appendString", params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.none,
+      [binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32],
+      // 3 target_length, 4 target_start, 5 source_length, 6 source_start, 7 remaining
+      this.wasm.block("", [
+        // target_length = mem[target]
+        setlocal(target_length, getmem(getlocal(target))),
+
+        // target_start = target + target_length + 1
+        setlocal(target_start, add(add(getlocal(target), getlocal(target_length)), constant(1))),
+
+        // source_length = mem[source]
+        setlocal(source_length, getmem(getlocal(source))),
+
+        // source_start = source + 1
+        setlocal(source_start, add(getlocal(source), constant(1))),
+
+        // remaining = max_size - target_length
+        setlocal(remaining, sub(getlocal(max_size), getlocal(target_length))),
+
+        // if (source_length > remaining)):
+        this.wasm.if(this.wasm.i32.gt_s(getlocal(source_length), getlocal(remaining)),
+          // source_length = remaining
+          setlocal(source_length, getlocal(remaining))
+        ),
+
+        // if (source_length == 0): return
+        this.wasm.if(this.wasm.i32.eq(getlocal(source_length), constant(0)),
+          this.wasm.return()
+        ),
+
+        // memcopy(target_start, source_start, source_length)
+        this.wasm.memory.copy(getlocal(target_start), getlocal(source_start), getlocal(source_length)),
+
+        // mem[target] = target_length + source_length
+        setmem(getlocal(target), add(getlocal(target_length), getlocal(source_length)))
+      ])
     );
   }
 
