@@ -25,7 +25,9 @@ const runTest = async (testname: string) => {
 
   const csl = new MockConsole();
   const wasmImports = csl.getImport();
-  new WebAssembly.Instance(mod, wasmImports);
+  const instance = new WebAssembly.Instance(mod, wasmImports);
+  const main: any = instance.exports.main;
+  main();
 
   expect(csl.lines.length).to.eq(output.length);
 

@@ -1,8 +1,8 @@
 import { assert } from "console";
 import { threadId } from "worker_threads";
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType } from "./expression";
-import { Decl, IdentifierType, Program, Routine, Stmt, VariableEntry, VariableLevel } from "./routine";
+import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString } from "./expression";
+import { Decl, IdentifierType, Program, Routine, Stmt, StringTable, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
 export class Parser {
@@ -14,6 +14,7 @@ export class Parser {
   currentRoutine: Routine;
   logger: ErrLogger.Reporter;
   loopLevel: number;
+  stringLiterals: StringTable;
 
   constructor(public text: string, logger?: ErrLogger.Reporter) {
     this.precedenceRule = this.buildPrecedence();
@@ -25,6 +26,7 @@ export class Parser {
     this.currentRoutine = new Program("");
     this.logger = logger || ErrLogger.logger;
     this.loopLevel = 0;
+    this.stringLiterals = new Map();
   }
 
   parse(): Program | undefined  {
@@ -55,6 +57,8 @@ export class Parser {
 
     program.body = this.compound();
     this.consume(TokenTag.DOT, "Expect '.' after end.");
+
+    program.stringTable = this.stringLiterals;
   }
 
   /** Declarations **/
@@ -551,8 +555,7 @@ export class Parser {
   private isPrintable(type?: PascalType): boolean {
     if (!type) return false;
 
-    // TODO: add string type
-    return type === BaseType.Boolean || type === BaseType.Char ||
+    return isString(type) || type === BaseType.Boolean || type === BaseType.Char ||
       type === BaseType.Integer || type === BaseType.Real;
   }
 
@@ -820,8 +823,55 @@ export class Parser {
   }
 
   private literals(constant?: Token): Expr {
-    const expr = new Expr.Literal(constant || this.previous);
+    const token = constant || this.previous;
+    let literal: number = 0;
+    let type: PascalType = BaseType.Void;
+
+    switch(token.tag) {
+      case TokenTag.INTEGER:{
+        type = BaseType.Integer;
+        literal = token.literal as number;
+        break;
+      }
+      case TokenTag.REAL: {
+        type = BaseType.Real;
+        literal = token.literal as number;
+        break;
+      }
+      case TokenTag.CHAR: {
+        type = BaseType.Char
+        literal = token.literal as number;
+        break;
+      }
+      case TokenTag.TRUE:
+      case TokenTag.FALSE: {
+        type = BaseType.Boolean;
+        literal = token.literal ? 1 : 0;
+        break;
+      }
+      case TokenTag.STRING:{
+        let stringVal = token.literal as string;
+        type = StringType.create(stringVal.length);
+        literal = this.addStringLiteral(stringVal);
+        break;
+      }
+      default:
+        throw new UnreachableErr("Can't build literal without value");
+
+    }
+
+    const expr = new Expr.Literal(type, literal);
     return expr;
+  }
+
+  private addStringLiteral(str: string): number {
+    let entry = this.stringLiterals.get(str);
+    if (entry == null){
+      entry = this.stringLiterals.size;
+      this.stringLiterals.set(str, entry);
+    }
+
+    return entry;
   }
 
   private grouping(): Expr {
@@ -916,7 +966,7 @@ export class Parser {
     }
 
     return {
-      // [TokenTag.STRING]:     entry(parser.literals, null, Precedence.None),
+      [TokenTag.STRING]:     entry(parser.literals, null, Precedence.None),
       [TokenTag.CHAR]:       entry(parser.literals, null, Precedence.None),
       [TokenTag.INTEGER]:    entry(parser.literals, null, Precedence.None),
       [TokenTag.REAL]:       entry(parser.literals, null, Precedence.None),

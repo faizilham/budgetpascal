@@ -42,7 +42,7 @@ IDENTIFIER test_var1_name 22
 IDENTIFIER integer 23
 IDENTIFIER real 23
 IDENTIFIER char 23
-IDENTIFIER string 23
+STRING_TYPE string 23
 TRUE true 25 true
 FALSE false 25 false
 INTEGER 124 27 124

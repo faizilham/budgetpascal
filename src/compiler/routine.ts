@@ -1,4 +1,4 @@
-import { BaseType, Expr, isTypeEqual, PascalType } from "./expression";
+import { BaseType, Expr, isTypeEqual, PascalType, StringType } from "./expression";
 import { Token } from "./scanner";
 
 export abstract class Routine {
@@ -27,7 +27,10 @@ export abstract class Routine {
   }
 }
 
+export type StringTable = Map<string, number>;
+
 export class Program extends Routine {
+  public stringTable?: StringTable;
   constructor(public name: string) {
     super();
   }

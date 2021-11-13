@@ -1,12 +1,14 @@
-import binaryen, { UnreachableId } from "binaryen";
+import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, PascalType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isString, PascalType } from "./expression";
 import { Decl, Program, Routine, Stmt, VariableLevel } from "./routine";
 import { TokenTag } from "./scanner";
 
 const PUTINT_MODE_INT = 0;
 const PUTINT_MODE_CHAR = 1;
 const PUTINT_MODE_BOOL = 2;
+
+const DATA_ADDRESS = 0;
 
 class Context {
   parent?: Context;
@@ -26,6 +28,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   private currentContext?: Context;
   private currentLoop: number;
   private loopCount: number;
+  private stringAddresses: number[];
 
   constructor(private program: Program) {
     this.wasm = new binaryen.Module();
@@ -33,6 +36,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.prevBlocks = [];
     this.currentLoop = 0;
     this.loopCount = 0;
+    this.stringAddresses = [];
   }
 
   emit(optimize: boolean = true): Uint8Array {
@@ -47,6 +51,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     }
 
     this.startContext(this.program);
+    this.buildMemory();
     this.buildDeclarations(this.program);
     this.program.body.accept(this);
 
@@ -56,15 +61,15 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.endContext();
 
     this.wasm.addFunctionExport("main", "main");
-    this.wasm.setStart(main);
 
     this.addImports();
 
-    if (optimize) this.wasm.optimize();
     if (!this.wasm.validate()) {
       console.error(this.wasm.emitText());
       throw new Error("Panic: invalid wasm");
     }
+
+    if (optimize) this.wasm.optimize();
   }
 
   private addImports() {
@@ -72,6 +77,47 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
       binaryen.createType([binaryen.i32, binaryen.i32]), binaryen.none);
     this.wasm.addFunctionImport("putreal", "rtl", "putreal", binaryen.f64, binaryen.none);
     this.wasm.addFunctionImport("putln", "rtl", "putln", binaryen.none, binaryen.none);
+    this.wasm.addFunctionImport("putstr", "rtl", "putstr", binaryen.i32, binaryen.none);
+  }
+
+  private buildMemory() {
+    const segments = this.buildStrings();
+    this.wasm.setMemory(2, 64, "mem", segments); // 64 page = 4MB
+  }
+
+  private buildStrings(): MemorySegment[] {
+    this.stringAddresses = [];
+    const stringTable = this.program.stringTable;
+    if (!stringTable) return [];
+
+    let entries: [string, number][] = [];
+    for (const entry of stringTable.entries()){
+      entries.push(entry);
+    }
+
+    entries.sort((a, b) => a[1] - b[1]);
+
+    const segments: MemorySegment[] = [];
+    let offset = DATA_ADDRESS;
+
+    for (const [str, id] of entries) {
+      const data = new Uint8Array(str.length + 1);
+      data[0] = str.length;
+
+      for (let i = 0; i < str.length; i++) {
+        data[i+1] = str.charCodeAt(i);
+      }
+
+      segments.push({data, offset: this.wasm.i32.const(offset)});
+      this.stringAddresses.push(offset);
+      offset += data.length;
+    }
+
+    return segments;
+  }
+
+  private getStringLiteral(id: number): number {
+    return this.stringAddresses[id];
   }
 
   /* Declarations */
@@ -376,7 +422,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         case BaseType.Boolean:
           params.push(this.wasm.i32.const(PUTINT_MODE_BOOL));
         break;
-        default: continue;
+        default: // assumed String type
+          func = "putstr";
+        break;
       }
 
       this.currentBlock.push(
@@ -606,14 +654,17 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   }
 
   visitLiteral(expr: Expr.Literal): number {
+    if (isString(expr.type)) {
+      return this.wasm.i32.const(this.getStringLiteral(expr.literal));
+    }
+
     switch(expr.type) {
       case BaseType.Integer:
       case BaseType.Char:
-        return this.wasm.i32.const(expr.literal as number);
       case BaseType.Boolean:
-        return this.wasm.i32.const(expr.literal ? 1 : 0);
+        return this.wasm.i32.const(expr.literal);
       case BaseType.Real:
-        return this.wasm.f64.const(expr.literal as number);
+        return this.wasm.f64.const(expr.literal);
       default:
         throw new UnreachableErr("Invalid literal type " + getTypeName(expr.type));
     }

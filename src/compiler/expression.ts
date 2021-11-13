@@ -10,7 +10,24 @@ export enum BaseType {
   Real,
 }
 
-export type PascalType = BaseType;
+export class StringType {
+  private constructor(public size: number){}
+
+  private static sizes: {[key: number]: StringType} = {};
+
+  static create(size: number = 255): StringType {
+    let strtype = StringType.sizes[size];
+
+    if (strtype == null) {
+      strtype = new StringType(size);
+      StringType.sizes[size] = strtype;
+    }
+
+    return strtype;
+  }
+}
+
+export type PascalType = BaseType | StringType;
 
 export function isNumberType(type?: PascalType): boolean {
   return type === BaseType.Integer || type === BaseType.Real;
@@ -24,12 +41,20 @@ export function isBool(type?: PascalType): boolean {
   return type === BaseType.Boolean;
 }
 
+export function isString(type?: PascalType): type is StringType {
+  return type != null && (type as StringType).size != null;
+}
+
 export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
   if (a == null || b == null) return false;
-  return a === b;
+  if (a === b) return true;
+  if (isString(a) && isString(b)) return true;
+
+  return false;
 }
 
 export function getTypeName(type?: PascalType): string {
+  if (isString(type)) return type.size < 255 ? `string[${type.size}]` : "string";
   return BaseType[ type || BaseType.Void];
 }
 
@@ -65,29 +90,8 @@ export namespace Expr {
   }
 
   export class Literal extends Expr {
-    public literal: boolean | number | string;
-    constructor(public token: Token){
+    constructor(public type: PascalType, public literal: number){
       super();
-
-      switch(token.tag) {
-        case TokenTag.INTEGER: this.type = BaseType.Integer; break;
-        case TokenTag.REAL: this.type = BaseType.Real; break;
-        case TokenTag.CHAR: this.type = BaseType.Char; break;
-        case TokenTag.TRUE:
-        case TokenTag.FALSE:
-          this.type = BaseType.Boolean;
-        break;
-        case TokenTag.STRING:
-          // TODO: fill after string type exist
-        break;
-      }
-
-      if (token.literal == null) {
-        // should not go here
-        throw new UnreachableErr("Can't build literal without value");
-      }
-
-      this.literal = token.literal;
     }
 
     public accept<T>(visitor: Visitor<T>): T {

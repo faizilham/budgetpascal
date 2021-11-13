@@ -26,7 +26,7 @@ export enum TokenTag {
   // Keywords
   ARRAY, BEGIN, BREAK, CONTINUE, CASE, CONST, DO, DOWNTO, ELSE, END, FOR,
   FUNCTION, FORWARD, IF, OF, PROCEDURE, PROGRAM, RECORD, REPEAT, THEN, TO,
-  TYPE, UNTIL, VAR, WHILE, READ, READLN, WRITE, WRITELN
+  TYPE, STRING_TYPE, UNTIL, VAR, WHILE, READ, READLN, WRITE, WRITELN
 }
 
 export class Token {
@@ -99,6 +99,7 @@ const KeywordTokens : {[key: string]: TokenTag} = {
   "readln": TokenTag.READLN,
   "record": TokenTag.RECORD,
   "repeat": TokenTag.REPEAT,
+  "string": TokenTag.STRING_TYPE,
   "shl": TokenTag.SHL,
   "shr": TokenTag.SHR,
   "then": TokenTag.THEN,
@@ -370,7 +371,15 @@ export class Scanner {
 
     let token = this.makeToken(TokenTag.STRING);
     let str = token.lexeme.substring(1, token.lexeme.length - 1);
-    token.literal = str.replace(/''/g, "'");
+    str = str.replace(/''/g, "'");
+
+    if (str.length > 255) {
+      this.reportError("String literal can't be longer than 255");
+      return this.makeToken(TokenTag.UNKNOWN);
+    }
+
+    token.literal = str;
+
     return token;
   }
 

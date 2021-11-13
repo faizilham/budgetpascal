@@ -4,7 +4,7 @@ import { ErrLogger } from "./compiler/errors";
 
 const debugWasm = false;
 
-const filename = "testcases/branching.pas";
+const filename = "testcases/strings.pas";
 // const filename = "testcases/errors/syntax_err.pas";
 const data = fs.readFileSync(filename).toString();
 
@@ -28,6 +28,7 @@ if (binary) {
   }
 
   const mod = new WebAssembly.Module(binary);
+  let memory: any;
 
   const importObject = {
     rtl: {
@@ -40,9 +41,20 @@ if (binary) {
         }
       },
       putreal: (x: number) => { process.stdout.write(x.toExponential()); },
-      putln: () => { process.stdout.write("\n"); }
+      putln: () => { process.stdout.write("\n"); },
+      putstr: (addr: number) => {
+        let mem = memory as Uint8Array;
+        const start = addr + 1;
+        const end = start + mem[addr];
+
+        process.stdout.write(mem.slice(start, end));
+      }
     }
   };
 
-  new WebAssembly.Instance(mod, importObject);
+  const instance = new WebAssembly.Instance(mod, importObject);
+  memory = new Uint8Array((instance.exports.mem as WebAssembly.Memory).buffer);
+
+  const main: any = instance.exports.main;
+  main();
 }

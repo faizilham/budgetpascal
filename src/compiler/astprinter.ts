@@ -1,4 +1,4 @@
-import {Expr, PascalType, BaseType} from "./expression";
+import {Expr, PascalType, BaseType, getTypeName} from "./expression";
 import { Program, Stmt } from "./routine";
 
 export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
@@ -139,5 +139,5 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
 function typeName(type?: PascalType): string {
   if (type == null) return "???";
 
-  return BaseType[type];
+  return getTypeName(type);
 }
