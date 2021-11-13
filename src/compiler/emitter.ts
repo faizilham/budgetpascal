@@ -68,7 +68,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
       throw new Error("Panic: invalid wasm");
     }
 
-    // if (optimize) this.wasm.optimize();
+    if (optimize) this.wasm.optimize();
   }
 
   private buildMemory() {
@@ -407,10 +407,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
     }
 
-    const copyInstr = this.runtime.copyString(targetAddr, strType.size, sourceExpr);
+    const copyInstr = this.runtime.copyString(targetAddr, strType.size, sourceExpr, true);
 
-    // TODO: record stack then restore
-    this.currentBlock.push(copyInstr)
+    this.currentBlock.push(copyInstr);
   }
 
   visitWhileDo(stmt: Stmt.WhileDo)  {

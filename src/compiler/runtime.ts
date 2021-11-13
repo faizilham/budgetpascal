@@ -76,6 +76,10 @@ export class RuntimeBuilder {
     return this.wasm.global.get(Runtime.STACK_POINTER, binaryen.i32);
   }
 
+  restoreStackTop(expr: number): number {
+    return this.wasm.global.set(Runtime.STACK_POINTER, expr);
+  }
+
   private buildPop() {
     this.wasm.addFunction("$pop", binaryen.i32, binaryen.none, [],
       this.wasm.global.set(
@@ -88,27 +92,40 @@ export class RuntimeBuilder {
     );
   }
 
-  copyString(target: number, maxSize: number, source: number): number {
-    return this.wasm.call("$copyString", [target, this.wasm.i32.const(maxSize), source],
-        binaryen.none);
+  copyString(target: number, maxSize: number, source: number, preserveStack: boolean): number {
+    return this.wasm.call("$copyString",
+      [target, this.wasm.i32.const(maxSize), source, this.wasm.i32.const(preserveStack ? 1 : 0)],
+      binaryen.none);
   }
 
   private buildCopyString() {
-    // params: 0 target, 1 max_size, 2 source
+    // params: 0 target, 1 max_size, 2 source, 3 preserve_stack
     const target = 0;
     const max_size = 1;
     const source = 2;
+    const preserve_stack = 3;
+    const last_stack_top = 4;
 
+    const setlocal = (id: number, val: number) => this.wasm.local.set(id, val);
     const getlocal = (id: number) => this.wasm.local.get(id, binaryen.i32);
     const setmem = (ptr: number, val: number) => this.wasm.i32.store8(0, 1, ptr, val);
     const constant = (val: number) => this.wasm.i32.const(val);
 
-    this.wasm.addFunction("$copyString", params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.none,
-     [], this.wasm.block("", [
-       // mem[target]
+    this.wasm.addFunction("$copyString", params(binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32),
+      binaryen.none, [binaryen.i32], this.wasm.block("", [
+       // last_stack_top = sp
+       setlocal(last_stack_top, this.stackTop()),
+
+       // mem[target] = 0
        setmem(getlocal(target), constant(0)),
        this.wasm.call("$appendString", [getlocal(target), getlocal(max_size), getlocal(source)],
-          binaryen.none)
+          binaryen.none),
+
+       // if (!preserve_stack) return
+       this.wasm.if(this.wasm.i32.eqz(getlocal(preserve_stack)), this.wasm.return()),
+
+       // sp = last_stack_top
+       this.restoreStackTop(getlocal(last_stack_top))
      ]));
   }
 
