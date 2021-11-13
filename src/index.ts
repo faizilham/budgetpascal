@@ -2,7 +2,7 @@ import { compile } from "./compiler";
 import fs from "fs";
 import { ErrLogger } from "./compiler/errors";
 
-const debugWasm = false;
+const debugWasm = true;
 
 const filename = "testcases/strings.pas";
 // const filename = "testcases/errors/syntax_err.pas";

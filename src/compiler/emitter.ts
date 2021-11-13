@@ -2,13 +2,8 @@ import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isString, PascalType } from "./expression";
 import { Decl, Program, Routine, Stmt, VariableLevel } from "./routine";
+import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
-
-const PUTINT_MODE_INT = 0;
-const PUTINT_MODE_CHAR = 1;
-const PUTINT_MODE_BOOL = 2;
-
-const DATA_ADDRESS = 0;
 
 class Context {
   parent?: Context;
@@ -29,6 +24,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   private currentLoop: number;
   private loopCount: number;
   private stringAddresses: number[];
+  private runtime: RuntimeBuilder;
 
   constructor(private program: Program) {
     this.wasm = new binaryen.Module();
@@ -37,6 +33,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.currentLoop = 0;
     this.loopCount = 0;
     this.stringAddresses = [];
+    this.runtime = new RuntimeBuilder(this.wasm);
   }
 
   emit(optimize: boolean = true): Uint8Array {
@@ -50,8 +47,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
       throw new Error("Panic: null program body");
     }
 
-    this.startContext(this.program);
     this.buildMemory();
+    this.runtime.buildStack();
+
+    this.startContext(this.program);
     this.buildDeclarations(this.program);
     this.program.body.accept(this);
 
@@ -62,22 +61,14 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
     this.wasm.addFunctionExport("main", "main");
 
-    this.addImports();
+    this.runtime.buildImports();
 
     if (!this.wasm.validate()) {
       console.error(this.wasm.emitText());
       throw new Error("Panic: invalid wasm");
     }
 
-    if (optimize) this.wasm.optimize();
-  }
-
-  private addImports() {
-    this.wasm.addFunctionImport("putint", "rtl", "putint",
-      binaryen.createType([binaryen.i32, binaryen.i32]), binaryen.none);
-    this.wasm.addFunctionImport("putreal", "rtl", "putreal", binaryen.f64, binaryen.none);
-    this.wasm.addFunctionImport("putln", "rtl", "putln", binaryen.none, binaryen.none);
-    this.wasm.addFunctionImport("putstr", "rtl", "putstr", binaryen.i32, binaryen.none);
+    // if (optimize) this.wasm.optimize();
   }
 
   private buildMemory() {
@@ -98,7 +89,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     entries.sort((a, b) => a[1] - b[1]);
 
     const segments: MemorySegment[] = [];
-    let offset = DATA_ADDRESS;
+    let offset = Runtime.DATA_ADDRESS;
 
     for (const [str, id] of entries) {
       const data = new Uint8Array(str.length + 1);
@@ -116,7 +107,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     return segments;
   }
 
-  private getStringLiteral(id: number): number {
+  private getStringAddress(id: number): number {
     return this.stringAddresses[id];
   }
 
@@ -404,38 +395,32 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
   visitWrite(stmt: Stmt.Write) {
     for (let e of stmt.outputs) {
-      let params: number[] = [];
+      const operand = e.accept(this);
 
-      params[0] = e.accept(this);
-
-      let func = "putint";
+      let call;
       switch(e.type) {
         case BaseType.Real:
-          func = "putreal";
+          call = this.runtime.putReal(operand);
         break;
         case BaseType.Integer:
-          params.push(this.wasm.i32.const(PUTINT_MODE_INT));
+          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_INT);
         break;
         case BaseType.Char:
-          params.push(this.wasm.i32.const(PUTINT_MODE_CHAR));
+          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_CHAR);
         break;
         case BaseType.Boolean:
-          params.push(this.wasm.i32.const(PUTINT_MODE_BOOL));
+          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_BOOL);
         break;
         default: // assumed String type
-          func = "putstr";
+          call = this.runtime.putStr(operand);
         break;
       }
 
-      this.currentBlock.push(
-        this.wasm.call(func, params, binaryen.none)
-      );
+      this.currentBlock.push(call);
     }
 
     if (stmt.newline) {
-      this.currentBlock.push(
-        this.wasm.call("putln", [], binaryen.none)
-      );
+      this.currentBlock.push(this.runtime.putLn());
     }
   }
 
@@ -655,7 +640,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
   visitLiteral(expr: Expr.Literal): number {
     if (isString(expr.type)) {
-      return this.wasm.i32.const(this.getStringLiteral(expr.literal));
+      return this.wasm.i32.const(this.getStringAddress(expr.literal));
     }
 
     switch(expr.type) {
