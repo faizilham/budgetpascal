@@ -69,6 +69,7 @@ export class Range {
 export abstract class Expr {
   assignable: boolean = false;
   type: PascalType | undefined;
+  stackNeutral: boolean = false;
   public abstract accept<T>(visitor: Expr.Visitor<T>) : T;
 }
 
@@ -76,6 +77,7 @@ export namespace Expr {
   export class Unary extends Expr {
     constructor(public operator: Token, public operand: Expr){
       super();
+      this.stackNeutral = operand.stackNeutral;
     }
 
     public accept<T>(visitor: Visitor<T>): T {
@@ -86,6 +88,7 @@ export namespace Expr {
   export class Binary extends Expr {
     constructor(public operator: Token, public a: Expr, public b: Expr){
       super();
+      this.stackNeutral = a.stackNeutral && b.stackNeutral;
     }
 
     public accept<T>(visitor: Visitor<T>): T {
@@ -96,6 +99,7 @@ export namespace Expr {
   export class Literal extends Expr {
     constructor(public type: PascalType, public literal: number){
       super();
+      this.stackNeutral = true;
     }
 
     public accept<T>(visitor: Visitor<T>): T {
@@ -107,6 +111,7 @@ export namespace Expr {
     constructor(public operator: Token, public a: Expr, public b: Expr){
       super();
       this.type = BaseType.Boolean;
+      this.stackNeutral = a.stackNeutral && b.stackNeutral;
     }
 
     public accept<T>(visitor: Visitor<T>): T {
@@ -120,6 +125,7 @@ export namespace Expr {
       super();
       this.type = StringType.create(255);
       this.operands = [];
+      this.stackNeutral = false;
     }
 
     public accept<T>(visitor: Visitor<T>): T {
@@ -131,6 +137,7 @@ export namespace Expr {
     constructor(public operator: Token, public left: Expr, public right: Expr) {
       super();
       this.type = BaseType.Boolean;
+      this.stackNeutral = left.stackNeutral && right.stackNeutral;
     }
 
     public accept<T>(visitor: Visitor<T>): T {
@@ -141,6 +148,7 @@ export namespace Expr {
   export class Typecast extends Expr {
     constructor(public operand: Expr, public type: PascalType){
       super();
+      this.stackNeutral = operand.stackNeutral && !isString(type);
     }
 
     public accept<T>(visitor: Visitor<T>): T {
@@ -153,6 +161,7 @@ export namespace Expr {
       super();
       this.assignable = true;
       this.type = entry.type;
+      this.stackNeutral = true;
     }
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitVariable(this);

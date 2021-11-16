@@ -115,6 +115,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     return this.stringAddresses[id];
   }
 
+  private debugPrintStackTop() {
+    this.currentBlock.push(this.runtime.debugPrintStackTop());
+  }
+
   /* Declarations */
   buildDeclarations(routine: Routine) {
     for (let decl of routine.declarations) {
@@ -242,7 +246,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
     this.startBlock();// start loop block
 
-    let condition = stmt.condition.accept(this);
+    let condition = this.visitAndPreserveStack(stmt.condition);
     const loopLabel = this.getLoopLabel();
     const outerLabel = this.getOuterLoopLabel();
 
@@ -270,7 +274,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   }
 
   visitIfElse(stmt: Stmt.IfElse) {
-    let condition = stmt.condition.accept(this);
+    let condition = this.visitAndPreserveStack(stmt.condition);
 
     let ifTrue, ifFalse;
 
@@ -349,7 +353,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
       s.accept(this);
     }
 
-    const finishCondition = stmt.finishCondition.accept(this);
+    const finishCondition = this.visitAndPreserveStack(stmt.finishCondition);
     this.currentBlock.push(
       this.wasm.br_if(outerLabel, finishCondition)
     );
@@ -366,7 +370,8 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
   visitSetVariable(stmt: Stmt.SetVariable) {
     const entry = stmt.target.entry;
-    let exprInstr = stmt.value.accept(this);
+    let exprInstr = this.visitAndPreserveStack(stmt.value);
+    // safe to do, since restoring stack top doesn't remove the value from memory
 
     if (stmt.target.type === BaseType.Real) {
       exprInstr = this.intoReal(stmt.value, exprInstr);
@@ -411,7 +416,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
     }
 
-    const copyInstr = this.runtime.copyString(targetAddr, strType.size, sourceExpr, true);
+    const copyInstr = this.runtime.copyString(targetAddr, strType.size, sourceExpr);
 
     this.currentBlock.push(copyInstr);
   }
@@ -421,7 +426,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.currentLoop = this.addLoop();
 
     this.startBlock();
-    let condition = stmt.condition.accept(this);
+    let condition = this.visitAndPreserveStack(stmt.condition);
     const loopLabel = this.getLoopLabel();
     const outerLabel = this.getOuterLoopLabel();
 
@@ -444,7 +449,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
   visitWrite(stmt: Stmt.Write) {
     for (let e of stmt.outputs) {
-      const operand = e.accept(this);
+      const operand = this.visitAndPreserveStack(e);
 
       let call;
       switch(e.type) {
@@ -491,6 +496,14 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   }
 
   /* Expressions */
+  visitAndPreserveStack(expr: Expr): number {
+    let exprInstr = expr.accept(this);
+    if (!expr.stackNeutral) {
+      exprInstr = this.runtime.preserveStack(exprInstr);
+    }
+
+    return exprInstr;
+  }
 
   visitVariable(expr: Expr.Variable): number {
     const entry = expr.entry;

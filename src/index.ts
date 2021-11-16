@@ -47,6 +47,8 @@ if (binary) {
         const start = addr + 1;
         const end = start + mem[addr];
 
+        // console.log(` putstr(${start},${end}) `);
+
         process.stdout.write(mem.slice(start, end));
       }
     }

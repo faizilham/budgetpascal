@@ -38,6 +38,7 @@ export class RuntimeBuilder {
 
     this.buildPush();
     this.buildPop();
+    this.buildPreserveStack();
     this.buildCopyString();
     this.buildAppendString();
     this.buildCharToStr();
@@ -94,40 +95,66 @@ export class RuntimeBuilder {
     );
   }
 
-  copyString(target: number, maxSize: number, source: number, preserveStack: boolean): number {
+  preserveStack(exprInstr: number): number {
+    const sp = this.stackTop();
+    const exprType = binaryen.getExpressionType(exprInstr);
+    let name = "$preserveStack.i32";
+    if (exprType === binaryen.f64) {
+      name = "$preserveStack.f64";
+    }
+
+    return this.wasm.call(name, [sp, exprInstr], exprType);
+  }
+
+  private buildPreserveStack() {
+    this.wasm.addFunction("$preserveStack.i32", params(binaryen.i32, binaryen.i32), binaryen.i32, [],
+    this.wasm.block("", [
+      this.restoreStackTop(this.wasm.local.get(0, binaryen.i32)),
+      this.wasm.local.get(1, binaryen.i32)
+    ], binaryen.i32));
+
+    this.wasm.addFunction("$preserveStack.f64", params(binaryen.i32, binaryen.f64), binaryen.f64, [],
+    this.wasm.block("", [
+      this.restoreStackTop(this.wasm.local.get(0, binaryen.i32)),
+      this.wasm.local.get(1, binaryen.f64)
+    ], binaryen.f64));
+  }
+
+  debugPrintStackTop(): number {
+    const constant = (c: number) => this.wasm.i32.const(c);
+    return this.wasm.block("", [
+      this.putInt(constant(83), Runtime.PUTINT_MODE_CHAR),
+      this.putInt(constant(80), Runtime.PUTINT_MODE_CHAR),
+      this.putInt(constant(58), Runtime.PUTINT_MODE_CHAR),
+      this.putInt(constant(32), Runtime.PUTINT_MODE_CHAR),
+      this.putInt(this.stackTop(), Runtime.PUTINT_MODE_INT),
+      this.putLn()
+    ]);
+  }
+
+  copyString(target: number, maxSize: number, source: number): number {
     return this.wasm.call("$copyString",
-      [target, this.wasm.i32.const(maxSize), source, this.wasm.i32.const(preserveStack ? 1 : 0)],
+      [target, this.wasm.i32.const(maxSize), source],
       binaryen.none);
   }
 
   private buildCopyString() {
-    // params: 0 target, 1 max_size, 2 source, 3 preserve_stack
+    // params: 0 target, 1 max_size, 2 source,
     const target = 0;
     const max_size = 1;
     const source = 2;
-    const preserve_stack = 3;
-    const last_stack_top = 4;
 
     const setlocal = (id: number, val: number) => this.wasm.local.set(id, val);
     const getlocal = (id: number) => this.wasm.local.get(id, binaryen.i32);
     const setmem = (ptr: number, val: number) => this.wasm.i32.store8(0, 1, ptr, val);
     const constant = (val: number) => this.wasm.i32.const(val);
 
-    this.wasm.addFunction("$copyString", params(binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32),
-      binaryen.none, [binaryen.i32], this.wasm.block("", [
-       // last_stack_top = sp
-       setlocal(last_stack_top, this.stackTop()),
-
+    this.wasm.addFunction("$copyString", params(binaryen.i32, binaryen.i32, binaryen.i32),
+      binaryen.none, [], this.wasm.block("", [
        // mem[target] = 0
        setmem(getlocal(target), constant(0)),
        this.wasm.call("$appendString", [getlocal(target), getlocal(max_size), getlocal(source)],
           binaryen.none),
-
-       // if (!preserve_stack) return
-       this.wasm.if(this.wasm.i32.eqz(getlocal(preserve_stack)), this.wasm.return()),
-
-       // sp = last_stack_top
-       this.restoreStackTop(getlocal(last_stack_top))
      ]));
   }
 

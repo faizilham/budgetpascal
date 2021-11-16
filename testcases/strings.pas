@@ -8,6 +8,7 @@ var
 begin
   writeln('hello world!');
   writeln('test');
+  writeln('hello ' + 'world ', 'hello ' + 'test ', 'test ' + 'world');
   a := 'test' + ' string';
   writeln(a);
 
@@ -22,7 +23,7 @@ begin
 
   a := 'test';
 
-  c := b + ' ' + a + #32 + 'string';
+  c := b + ' ' + (a + #32) + 'string';
 
   writeln(c);
 

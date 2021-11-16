@@ -863,6 +863,7 @@ export class Parser {
       for (const op of operand.operands) {
         parent.operands.push(op);
       }
+      return;
     }
 
     if (operand.type === BaseType.Char) {
