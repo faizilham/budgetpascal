@@ -127,6 +127,17 @@ export namespace Expr {
     }
   }
 
+  export class StringCompare extends Expr {
+    constructor(public operator: Token, public left: Expr, public right: Expr) {
+      super();
+      this.type = BaseType.Boolean;
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitStringCompare(this);
+    }
+  }
+
   export class Typecast extends Expr {
     constructor(public operand: Expr, public type: PascalType){
       super();
@@ -155,6 +166,7 @@ export namespace Expr {
     visitShortCircuit(expr: ShortCircuit): T;
     visitVariable(expr: Variable): T;
     visitStringConcat(expr: StringConcat): T;
+    visitStringCompare(expr: StringCompare): T;
     visitTypecast(expr: Typecast): T;
   }
 }

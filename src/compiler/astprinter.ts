@@ -131,6 +131,11 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
     throw new Error("Method not implemented.");
   }
 
+  visitStringCompare(expr: Expr.StringCompare): string {
+    // TODO:
+    throw new Error("Method not implemented.");
+  }
+
   visitTypecast(expr: Expr.Typecast): string {
     // TODO:
     throw new Error("Method not implemented.");

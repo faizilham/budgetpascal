@@ -820,14 +820,13 @@ export class Parser {
       case TokenTag.GREATER_EQ:
       case TokenTag.LESS_EQ:
       case TokenTag.NOT_EQ: {
-        //TODO: string-string, and string-char comparison
-        // use special expression AST for string comparison
-
         if ((isNumberType(left.type) && isNumberType(right.type)) ||
             (isBool(left.type) && isBool(right.type)) ||
             ((left.type === BaseType.Char) && (right.type === BaseType.Char))
             ) {
           exprType = BaseType.Boolean;
+        } else if(isStringLike(left.type) && isStringLike(right.type)) {
+          return this.stringCompare(operator, left, right);
         } else {
           throw errorOperandType();
         }
@@ -871,6 +870,13 @@ export class Parser {
     }
 
     parent.operands.push(operand);
+  }
+
+  private stringCompare(operator: Token, left: Expr, right: Expr): Expr {
+    if (left.type === BaseType.Char) left = new Expr.Typecast(left, StringType.create(1));
+    if (right.type === BaseType.Char) right = new Expr.Typecast(right, StringType.create(1));
+
+    return new Expr.StringCompare(operator, left, right);
   }
 
   private literals(constant?: Token): Expr {

@@ -41,6 +41,7 @@ export class RuntimeBuilder {
     this.buildCopyString();
     this.buildAppendString();
     this.buildCharToStr();
+    this.buildCompareStr();
   }
 
   buildImports() {
@@ -225,6 +226,87 @@ export class RuntimeBuilder {
       // return ptr
       this.wasm.return(getlocal(ptr)),
     ]));
+  }
+
+  compareStr(ptr1: number, ptr2: number): number {
+    return this.wasm.call("$compareStr", [ptr1, ptr2], binaryen.i32);
+  }
+
+  private buildCompareStr(){
+    // params: 0 ptr1, 1 ptr2
+    const wasm = this.wasm;
+
+    const ptr1 = 0;
+    const ptr2 = 1;
+    const length1 = 2;
+    const length2 = 3;
+    const end1 = 4;
+    const end2 = 5;
+    const c1 = 6;
+    const c2 = 7;
+
+    const setlocal = (id: number, val: number) => wasm.local.set(id, val);
+    const getlocal = (id: number) => wasm.local.get(id, binaryen.i32);
+    const constant = (val: number) => wasm.i32.const(val);
+    const add = (left: number, right: number) => wasm.i32.add(left, right);
+    const sub = (left: number, right: number) => wasm.i32.sub(left, right);
+    const getmem = (ptr: number) => wasm.i32.load8_u(0, 1, ptr);
+
+    this.wasm.addFunction("$compareStr", params(binaryen.i32, binaryen.i32), binaryen.i32,
+      [binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32],
+      wasm.block("", [
+        // length1 = mem[ptr1]; length2 = mem[ptr2]
+        setlocal(length1, getmem(getlocal(ptr1))),
+        setlocal(length2, getmem(getlocal(ptr2))),
+
+        // if (length1 === 0 || length2 === 0)
+        wasm.if(
+          wasm.i32.or(
+            wasm.i32.eqz(getlocal(length1)),
+            wasm.i32.eqz(getlocal(length2))
+          ),
+          // return length1 - length 2
+          wasm.return(sub(getlocal(length1), getlocal(length2)))
+        ),
+
+        // end1 = ptr1 + length1; end2 = ptr2 + length2
+        setlocal(end1, add(getlocal(ptr1), getlocal(length1))),
+        setlocal(end2, add(getlocal(ptr2), getlocal(length2))),
+
+        wasm.block("$compareStr.outer", [
+          wasm.loop("$compareStr.loop", this.wasm.block("", [
+            // ptr1++; ptr2++
+            setlocal(ptr1, add(getlocal(ptr1), constant(1))),
+            setlocal(ptr2, add(getlocal(ptr2), constant(1))),
+
+            // c1 = mem[ptr1]; c2 = mem[ptr2];
+            setlocal(c1, getmem(getlocal(ptr1))),
+            setlocal(c2, getmem(getlocal(ptr2))),
+
+            // if (c1 !== c2) break;
+            wasm.br_if("$compareStr.outer",
+              wasm.i32.ne(getlocal(c1), getlocal(c2))
+            ),
+
+            // if (end1 === ptr1 || end2 === ptr2)
+            wasm.if(
+              wasm.i32.or(
+                wasm.i32.eq(getlocal(end1), getlocal(ptr1)),
+                wasm.i32.eq(getlocal(end2), getlocal(ptr2)),
+              ),
+              // return length1 - length 2
+              wasm.return(sub(getlocal(length1), getlocal(length2)))
+            ),
+
+            // loop back
+            wasm.br("$compareStr.loop")
+          ]))
+        ]),
+
+        // return c1 - c2
+        wasm.return(sub(getlocal(c1), getlocal(c2)))
+      ])
+    );
   }
 
   /* Imports */

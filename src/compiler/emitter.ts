@@ -1,4 +1,4 @@
-import binaryen, { MemorySegment } from "binaryen";
+import binaryen, { MemorySegment, unreachable } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isString, PascalType, StringType } from "./expression";
 import { Decl, Program, Routine, Stmt, VariableEntry, VariableLevel } from "./routine";
@@ -727,6 +727,32 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     );
 
     return this.wasm.block(blockLabel, blockBody, binaryen.i32);
+  }
+
+  visitStringCompare(expr: Expr.StringCompare): number {
+    const left = expr.left.accept(this);
+    const right = expr.right.accept(this);
+    const compare = this.runtime.compareStr(left, right);
+
+    switch(expr.operator.tag) {
+      case TokenTag.EQUAL:
+        return this.wasm.i32.eqz(compare);
+      case TokenTag.NOT_EQ:
+        return this.wasm.i32.ne(compare, this.wasm.i32.const(0));
+
+      case TokenTag.GREATER:
+        return this.wasm.i32.gt_s(compare, this.wasm.i32.const(0));
+      case TokenTag.LESS:
+        return this.wasm.i32.lt_s(compare, this.wasm.i32.const(0));
+
+      case TokenTag.GREATER_EQ:
+        return this.wasm.i32.ge_s(compare, this.wasm.i32.const(0));
+      case TokenTag.LESS_EQ:
+        return this.wasm.i32.le_s(compare, this.wasm.i32.const(0));
+
+      default:
+        throw new UnreachableErr(`Unknown string comparator ${expr.operator.lexeme}`);
+    }
   }
 
   visitTypecast(expr: Expr.Typecast): number {

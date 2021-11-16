@@ -26,6 +26,8 @@ const runTest = async (testname: string) => {
   const csl = new MockConsole();
   const wasmImports = csl.getImport();
   const instance = new WebAssembly.Instance(mod, wasmImports);
+
+  csl.setMemory(instance.exports.mem as WebAssembly.Memory);
   const main: any = instance.exports.main;
   main();
 
@@ -39,6 +41,8 @@ const runTest = async (testname: string) => {
 describe("Compiler test", () => {
   it("Generate correct output for 'basic_expression' program",
     async () => runTest("basic_expression"));
-    it("Generate correct output for 'branching' program",
+  it("Generate correct output for 'branching' program",
     async () => runTest("branching"));
+  it("Generate correct output for 'strings' program",
+    async () => runTest("strings"));
 })

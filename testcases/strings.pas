@@ -25,12 +25,10 @@ begin
   c := b + ' ' + a + #32 + 'string';
 
   writeln(c);
+
+  writeln('ab' > 'abcd');
+  writeln(a = 'test');
+  writeln(a <> 'hello');
+  writeln('ab' >= 'ac');
+  writeln('abcd' < 'ab');
 end.
-{
-  results
-  hello world!
-  test
-  test
-  hello world
-  hello w
-}
