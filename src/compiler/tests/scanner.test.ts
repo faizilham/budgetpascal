@@ -21,7 +21,7 @@ describe("Scanner test", () => {
     expect(tokens.length).to.eq(results.length);
 
     for (let i = 0; i < tokens.length; i++) {
-      expect(tokens[i].toString()).to.eq(results[i]);
+      expect(tokens[i].toString().trim()).to.eq(results[i]);
     }
   });
 });

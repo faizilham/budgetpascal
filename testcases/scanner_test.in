@@ -30,7 +30,7 @@ true false
 # #120 #255 #256
 
 'string' '{with apostrophe "''" '''' }'
-''''
+'''''' 'a' '''' ''
 
 array begin break continue case
 const do downTo else end end. for

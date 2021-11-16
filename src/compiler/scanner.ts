@@ -376,9 +376,12 @@ export class Scanner {
     if (str.length > 255) {
       this.reportError("String literal can't be longer than 255");
       return this.makeToken(TokenTag.UNKNOWN);
+    } else if (str.length === 1) {
+      token.tag = TokenTag.CHAR;
+      token.literal = str.charCodeAt(0);
+    } else {
+      token.literal = str;
     }
-
-    token.literal = str;
 
     return token;
   }

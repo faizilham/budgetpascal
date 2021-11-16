@@ -61,7 +61,10 @@ CHAR #255 30 255
 UNKNOWN #256 30
 STRING 'string' 32 string
 STRING '{with apostrophe "''" '''' }' 32 {with apostrophe "'" '' }
-STRING '''' 33 '
+STRING '''''' 33 ''
+CHAR 'a' 33 97
+CHAR '''' 33 39
+STRING '' 33
 ARRAY array 35
 BEGIN begin 35
 BREAK break 35
