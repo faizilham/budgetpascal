@@ -1,7 +1,7 @@
 import { assert } from "console";
 import { threadId } from "worker_threads";
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike } from "./expression";
 import { Decl, IdentifierType, Program, Routine, Stmt, StringTable, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
@@ -615,8 +615,10 @@ export class Parser {
 
     // Type check;
     if (!isTypeEqual(left.type, right.type)) {
-      // the only valid implicit typecast is integer to real
-      if (left.type !== BaseType.Real || right.type !== BaseType.Integer) {
+      // valid implicit typecast: integer to real, char to string
+      if (isString(left.type) && right.type === BaseType.Char ) {
+        right = new Expr.Typecast(right, StringType.create(1));
+      } else if (left.type !== BaseType.Real || right.type !== BaseType.Integer) {
         throw this.errorAt(operator,
           `Can't assign value of type ${getTypeName(right.type)} to ${getTypeName(left.type)}`);
       }
@@ -635,6 +637,8 @@ export class Parser {
 
   private variable(): Expr {
     const varToken = this.previous;
+
+    // TODO: typecast parsing
 
     const entry = this.currentRoutine.findIdentifier(varToken.lexeme);
     if (!entry) throw this.errorAtPrevious(`Unknown identifier '${varToken.lexeme}'.`);
@@ -736,8 +740,10 @@ export class Parser {
 
       // (number, number) -> number
       case TokenTag.PLUS:
-        //TODO: string-string, string-char, char-char plus operator
-        // use special expression AST for string concatenation
+        // handle string concatenation
+        if (isStringLike(left.type) && isStringLike(right.type)) {
+          return this.stringConcat(left, right);
+        }
 
         // fallthrough
       case TokenTag.MINUS:
@@ -837,6 +843,34 @@ export class Parser {
     expr.type = exprType;
 
     return expr;
+  }
+
+  private stringConcat(left: Expr, right: Expr): Expr {
+    // assumptions: left & right is string or char
+    const ptrVar = this.reserveTempVariable(BaseType.Integer);
+    const concat = new Expr.StringConcat(ptrVar);
+
+    try {
+      this.addStringConcatMember(concat, left);
+      this.addStringConcatMember(concat, right);
+      return concat;
+    } finally {
+      this.releaseTempVariable(ptrVar);
+    }
+  }
+
+  private addStringConcatMember(parent: Expr.StringConcat, operand: Expr) {
+    if (operand instanceof Expr.StringConcat) {
+      for (const op of operand.operands) {
+        parent.operands.push(op);
+      }
+    }
+
+    if (operand.type === BaseType.Char) {
+      operand = new Expr.Typecast(operand, StringType.create(1));
+    }
+
+    parent.operands.push(operand);
   }
 
   private literals(constant?: Token): Expr {

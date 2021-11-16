@@ -23,6 +23,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   private currentContext?: Context;
   private currentLoop: number;
   private loopCount: number;
+  private labelCount: number;
   private stringAddresses: number[];
   private runtime: RuntimeBuilder;
 
@@ -32,6 +33,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.prevBlocks = [];
     this.currentLoop = 0;
     this.loopCount = 0;
+    this.labelCount = 0;
     this.stringAddresses = [];
     this.runtime = new RuntimeBuilder(this.wasm);
   }
@@ -46,6 +48,8 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     if (!this.program.body) {
       throw new Error("Panic: null program body");
     }
+
+    // binaryen.setDebugInfo(true);
 
     this.buildMemory();
     this.runtime.buildStack();
@@ -64,7 +68,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.runtime.buildImports();
 
     if (!this.wasm.validate()) {
-      console.error(this.wasm.emitText());
+      // console.error(this.wasm.emitText());
       throw new Error("Panic: invalid wasm");
     }
 
@@ -481,6 +485,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     return "OL" + this.currentLoop;
   }
 
+  private addNewLabel() {
+    // custom non loop labels
+    return "LB" + (this.labelCount++);
+  }
+
   /* Expressions */
 
   visitVariable(expr: Expr.Variable): number {
@@ -688,6 +697,52 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
     return this.wasm.if(left, ifTrue, ifFalse);
   }
+
+  visitStringConcat(expr: Expr.StringConcat): number {
+    const ptrVar = expr.ptrVar.index;
+    const strType = expr.type as StringType;
+    const blockLabel = this.addNewLabel();
+
+    const blockBody: number[] = [
+      // ptrVar = sp
+      this.wasm.local.set(ptrVar, this.runtime.stackTop()),
+
+      // sp += str.size + 1
+      this.runtime.pushStack(strType.size + 1),
+
+      // mem[ptrVar] = 0
+      this.wasm.i32.store8(0, 1, this.wasm.local.get(ptrVar, binaryen.i32), this.wasm.i32.const(0)),
+    ];
+
+    for (const operand of expr.operands) {
+      const op = operand.accept(this);
+
+      blockBody.push(
+        this.runtime.appendString(this.wasm.local.get(ptrVar, binaryen.i32), strType.size, op)
+      );
+    }
+
+    blockBody.push(
+      this.wasm.br(blockLabel, undefined, this.wasm.local.get(ptrVar, binaryen.i32))
+    );
+
+    return this.wasm.block(blockLabel, blockBody, binaryen.i32);
+  }
+
+  visitTypecast(expr: Expr.Typecast): number {
+    const operand = expr.operand.accept(this);
+    const fromType = expr.operand.type;
+    const toType = expr.type;
+    if (toType === BaseType.Real && fromType === BaseType.Integer) {
+      return this.wasm.f64.convert_s.i32(operand);
+    } else if (isString(toType) && fromType === BaseType.Char) {
+      return this.runtime.charToStr(operand);
+    }
+
+    // other typecasts should be between chars, int, and bool
+    return operand;
+  }
+
 
   visitLiteral(expr: Expr.Literal): number {
     if (isString(expr.type)) {

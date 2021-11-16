@@ -45,6 +45,10 @@ export function isString(type?: PascalType): type is StringType {
   return type != null && (type as StringType).size != null;
 }
 
+export function isStringLike(type?: PascalType): boolean {
+  return type === BaseType.Char || isString(type);
+}
+
 export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
   if (a == null || b == null) return false;
   if (a === b) return true;
@@ -110,6 +114,29 @@ export namespace Expr {
     }
   }
 
+  export class StringConcat extends Expr {
+    public operands: Expr[]
+    constructor(public ptrVar: VariableEntry) {
+      super();
+      this.type = StringType.create(255);
+      this.operands = [];
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitStringConcat(this);
+    }
+  }
+
+  export class Typecast extends Expr {
+    constructor(public operand: Expr, public type: PascalType){
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitTypecast(this);
+    }
+  }
+
   export class Variable extends Expr {
     constructor(public entry: VariableEntry){
       super();
@@ -127,5 +154,7 @@ export namespace Expr {
     visitLiteral(expr: Literal): T;
     visitShortCircuit(expr: ShortCircuit): T;
     visitVariable(expr: Variable): T;
+    visitStringConcat(expr: StringConcat): T;
+    visitTypecast(expr: Typecast): T;
   }
 }

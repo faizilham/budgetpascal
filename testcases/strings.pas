@@ -3,11 +3,15 @@ program strings;
 var
   a: string[7];
   b: string[11];
+  c: string;
 
 begin
   writeln('hello world!');
   writeln('test');
-  a := 'test';
+  a := 'test' + ' string';
+  writeln(a);
+
+  a := '';
   writeln(a);
 
   b := 'hello world!';
@@ -15,6 +19,12 @@ begin
 
   a := b;
   writeln(a);
+
+  a := 'test';
+
+  c := b + ' ' + a + #32 + 'string';
+
+  writeln(c);
 end.
 {
   results

@@ -1,4 +1,4 @@
-import binaryen, { none } from "binaryen";
+import binaryen from "binaryen";
 
 export namespace Runtime {
   export const DATA_ADDRESS = 0;
@@ -40,10 +40,11 @@ export class RuntimeBuilder {
     this.buildPop();
     this.buildCopyString();
     this.buildAppendString();
+    this.buildCharToStr();
   }
 
   buildImports() {
-    for (let func of this.importsUsed) {
+    for (let func of this.importsUsed) { // TODO: honestly, not needed. it will be optimized anyway
       const [paramType, returnType] = importFunctions[func];
       const [modName, baseName] = func.slice(1).split('.');
       this.wasm.addFunctionImport(func, modName, baseName, paramType, returnType);
@@ -191,6 +192,39 @@ export class RuntimeBuilder {
         setmem(getlocal(target), add(getlocal(target_length), getlocal(source_length)))
       ])
     );
+  }
+
+  charToStr(charValue: number): number {
+    return this.wasm.call("$charToStr", [charValue], binaryen.i32);
+  }
+
+  private buildCharToStr() {
+    // params: 0 charValue
+    // return: pointer to string
+    const charValue = 0;
+    const ptr = 1;
+
+    const setlocal = (id: number, val: number) => this.wasm.local.set(id, val);
+    const getlocal = (id: number) => this.wasm.local.get(id, binaryen.i32);
+    const setmem = (ptr: number, val: number) => this.wasm.i32.store8(0, 1, ptr, val);
+    const constant = (val: number) => this.wasm.i32.const(val);
+    this.wasm.addFunction("$charToStr", binaryen.i32, binaryen.i32, [binaryen.i32], this.wasm.block("", [
+
+      // ptr = sp; returnValue = ptr
+      setlocal(ptr, this.stackTop()),
+
+      // sp += 2
+      this.pushStack(2),
+
+      // mem[ptr] = 1
+      setmem(getlocal(ptr), constant(1)),
+
+      // mem[ptr + 1] = charValue
+      setmem(this.wasm.i32.add(getlocal(ptr), constant(1)), getlocal(charValue)),
+
+      // return ptr
+      this.wasm.return(getlocal(ptr)),
+    ]));
   }
 
   /* Imports */

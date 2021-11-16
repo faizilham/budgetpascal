@@ -7,6 +7,7 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
   constructor(public root: Program) {
     this.tab = 0;
   }
+
   print(): string {
     if (!this.root.body) return "<error>";
 
@@ -124,6 +125,17 @@ export class ASTPrinter implements Expr.Visitor<string>, Stmt.Visitor<string> {
 
     return str + ")";
   }
+
+  visitStringConcat(expr: Expr.StringConcat): string {
+    // TODO:
+    throw new Error("Method not implemented.");
+  }
+
+  visitTypecast(expr: Expr.Typecast): string {
+    // TODO:
+    throw new Error("Method not implemented.");
+  }
+
   visitLiteral(expr: Expr.Literal): string {
     if (expr.type === BaseType.Char){
       return "#" + expr.literal.toString();
