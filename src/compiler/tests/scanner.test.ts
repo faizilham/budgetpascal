@@ -4,11 +4,11 @@ import { expect } from "chai";
 
 describe("Scanner test", () => {
   it ('Scans all tokens as expected output', async () => {
-    let buffer = await fs.readFile("testcases/scanner_test.in");
+    let buffer = await fs.readFile("testcases/scanner/scanner_test.in");
     const text = buffer.toString();
     const scanner = new Scanner(text);
 
-    buffer = await fs.readFile("testcases/scanner_test.out");
+    buffer = await fs.readFile("testcases/scanner/scanner_test.out");
     const results = buffer.toString().trim().split(/\r?\n/);
 
     const tokens = [];

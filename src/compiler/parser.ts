@@ -1,5 +1,3 @@
-import { assert } from "console";
-import { threadId } from "worker_threads";
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike } from "./expression";
 import { Decl, IdentifierType, Program, Routine, Stmt, StringTable, VariableEntry, VariableLevel } from "./routine";

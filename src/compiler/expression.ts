@@ -1,6 +1,5 @@
-import { UnreachableErr } from "./errors";
 import { VariableEntry } from "./routine";
-import { Token, TokenTag } from "./scanner";
+import { Token } from "./scanner";
 
 export enum BaseType {
   Void,

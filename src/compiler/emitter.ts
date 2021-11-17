@@ -1,4 +1,4 @@
-import binaryen, { MemorySegment, unreachable } from "binaryen";
+import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isString, PascalType, StringType } from "./expression";
 import { Decl, Program, Routine, Stmt, VariableEntry, VariableLevel } from "./routine";

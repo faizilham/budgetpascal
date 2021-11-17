@@ -1,4 +1,4 @@
-import { BaseType, Expr, isTypeEqual, PascalType, StringType } from "./expression";
+import { BaseType, Expr, isTypeEqual, PascalType } from "./expression";
 import { Token } from "./scanner";
 
 export abstract class Routine {
