@@ -32,7 +32,7 @@ if (binary) {
 
   const importObject = {
     rtl: {
-      putint: (n: number, mode: number) => {
+      $putint: (n: number, mode: number) => {
         switch(mode) {
           case 1: process.stdout.write(String.fromCharCode(n)); break;
           case 2: process.stdout.write( n === 0 ? "FALSE" : "TRUE"); break;
@@ -40,9 +40,9 @@ if (binary) {
             process.stdout.write(n.toString());
         }
       },
-      putreal: (x: number) => { process.stdout.write(x.toExponential()); },
-      putln: () => { process.stdout.write("\n"); },
-      putstr: (addr: number) => {
+      $putreal: (x: number) => { process.stdout.write(x.toExponential()); },
+      $putln: () => { process.stdout.write("\n"); },
+      $putstr: (addr: number) => {
         let mem = memory as Uint8Array;
         const start = addr + 1;
         const end = start + mem[addr];

@@ -21,7 +21,7 @@ export class MockConsole {
     const lines = this.lines;
     return {
       rtl: {
-        putint: (n: number, mode: number) => {
+        $putint: (n: number, mode: number) => {
           switch(mode) {
             case 1: currentline.push(String.fromCharCode(n)); break;
             case 2: currentline.push( n === 0 ? "FALSE" : "TRUE"); break;
@@ -29,9 +29,9 @@ export class MockConsole {
               currentline.push(n.toString());
           }
         },
-        putreal: (x: number) => { currentline.push(x.toExponential()); },
-        putln: () => { lines.push(currentline.join("").trim()); currentline = []; },
-        putstr: (addr: number) => {
+        $putreal: (x: number) => { currentline.push(x.toExponential()); },
+        $putln: () => { lines.push(currentline.join("").trim()); currentline = []; },
+        $putstr: (addr: number) => {
           const memory = this.memory as Uint8Array;
 
           const start = addr + 1;

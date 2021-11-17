@@ -7,22 +7,17 @@ export namespace Runtime {
   export const STACK_POINTER = "@sp";
   export const FRAME_POINTER = "@fp";
 
-  export const PUTINT_FUNC = "$putint";
-  export const PUTREAL_FUNC = "$putreal";
-  export const PUTLN_FUNC = "$putln";
-  export const PUTSTR_FUNC = "$putstr";
-
   export const PUTINT_MODE_INT = 0;
   export const PUTINT_MODE_CHAR = 1;
   export const PUTINT_MODE_BOOL = 2;
 }
 
 const importFunctions: {[key: string]: [number, number]} = {
-  "$rtl.putint": [params(binaryen.i32, binaryen.i32), binaryen.none],
-  "$rtl.putreal": [binaryen.f64, binaryen.none],
-  "$rtl.putln": [binaryen.none, binaryen.none],
-  "$rtl.putstr": [ binaryen.i32, binaryen.none],
-}
+  "rtl.$putint": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "rtl.$putreal": [binaryen.f64, binaryen.none],
+  "rtl.$putln": [binaryen.none, binaryen.none],
+  "rtl.$putstr": [ binaryen.i32, binaryen.none],
+};
 
 export class RuntimeBuilder {
   private importsUsed: Set<string>
@@ -48,7 +43,7 @@ export class RuntimeBuilder {
   buildImports() {
     for (let func of this.importsUsed) { // TODO: honestly, not needed. it will be optimized anyway
       const [paramType, returnType] = importFunctions[func];
-      const [modName, baseName] = func.slice(1).split('.');
+      const [modName, baseName] = func.split('.');
       this.wasm.addFunctionImport(func, modName, baseName, paramType, returnType);
     }
   }
@@ -131,6 +126,8 @@ export class RuntimeBuilder {
       this.putLn()
     ]);
   }
+
+  /* String Operations */
 
   copyString(target: number, maxSize: number, source: number): number {
     return this.wasm.call("$copyString",
@@ -339,23 +336,23 @@ export class RuntimeBuilder {
   /* Imports */
 
   putInt(operand: number, mode: number): number {
-    this.importsUsed.add("$rtl.putint");
-    return this.wasm.call("$rtl.putint", [operand, this.wasm.i32.const(mode)], binaryen.none);
+    this.importsUsed.add("rtl.$putint");
+    return this.wasm.call("rtl.$putint", [operand, this.wasm.i32.const(mode)], binaryen.none);
   }
 
   putReal(operand: number): number {
-    this.importsUsed.add("$rtl.putreal");
-    return this.wasm.call("$rtl.putreal", [operand], binaryen.none);
+    this.importsUsed.add("rtl.$putreal");
+    return this.wasm.call("rtl.$putreal", [operand], binaryen.none);
   }
 
   putStr(addr: number): number {
-    this.importsUsed.add("$rtl.putstr");
-    return this.wasm.call("$rtl.putstr", [addr], binaryen.none);
+    this.importsUsed.add("rtl.$putstr");
+    return this.wasm.call("rtl.$putstr", [addr], binaryen.none);
   }
 
   putLn(): number {
-    this.importsUsed.add("$rtl.putln");
-    return this.wasm.call("$rtl.putln", [], binaryen.none);
+    this.importsUsed.add("rtl.$putln");
+    return this.wasm.call("rtl.$putln", [], binaryen.none);
   }
 }
 
