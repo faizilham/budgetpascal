@@ -5,8 +5,8 @@
   "author": "Faiz Ilham <faizilham.faizz@gmail.com>",
   "license": "MIT",
   "scripts": {
-    "start": "node dist/index.js",
-    "build": "tsc",
+    "start": "node dist/cmd/index.js",
+    "build": "tsc -p tsconfig.build.json",
     "test": "mocha -r ts-node/register 'src/compiler/tests/*.test.ts'"
   },
   "devDependencies": {

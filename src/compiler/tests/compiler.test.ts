@@ -1,7 +1,7 @@
 import { Parser } from "../parser";
 import fs from "fs/promises";
 import { expect } from "chai";
-import { MockConsole } from "./mock_console";
+import { MockConsole } from "./console.mock";
 import { Emitter } from "../emitter";
 import { Program } from "../routine";
 

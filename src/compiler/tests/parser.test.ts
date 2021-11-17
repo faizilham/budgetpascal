@@ -1,7 +1,7 @@
 import { Parser } from "../parser";
 import fs from "fs/promises";
 import { expect } from "chai";
-import { MockLogger } from "./mock_console";
+import { MockLogger } from "./console.mock";
 
 const testfileDir = "testcases/errors/"
 

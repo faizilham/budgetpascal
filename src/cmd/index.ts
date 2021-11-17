@@ -1,35 +1,33 @@
-import { compile } from "./compiler";
+import { compile } from "../compiler";
 import fs from "fs";
-import { ErrLogger } from "./compiler/errors";
 
 const debugWasm = true;
 
-const filename = "testcases/strings.pas";
-// const filename = "testcases/errors/syntax_err.pas";
-const data = fs.readFileSync(filename).toString();
+let filename = "testcases/strings.pas";
+// let filename = "testcases/errors/syntax_err.pas";
 
-// function testParser() {
-//   const parser = new Parser(data);
-//   const program = parser.parse();
+if (process.argv[2]) filename = process.argv[2];
 
-//   if (program) {
-//     const astprinter = new ASTPrinter(program);
-//     console.log(astprinter.print());
-//   }
-// }
+runFile(filename);
 
-const binary = compile(data);
+function runFile(filename: string) {
+  const data = fs.readFileSync(filename).toString();
 
-if (binary) {
+  const compileTime = "Compiled in";
+  console.time(compileTime)
+
+  const binary = compile(data);
+  if (!binary) return;
+
+  console.timeEnd(compileTime);
+
   if (debugWasm) {
     fs.writeFile("tmp/debug.wasm", binary, (err) => {
-      if (err) ErrLogger.logger.error(err.message);
+      if (err) console.error(err.message);
     });
   }
 
-  const mod = new WebAssembly.Module(binary);
   let memory: any;
-
   const importObject = {
     rtl: {
       $putint: (n: number, mode: number) => {
@@ -54,9 +52,15 @@ if (binary) {
     }
   };
 
+  const mod = new WebAssembly.Module(binary);
   const instance = new WebAssembly.Instance(mod, importObject);
   memory = new Uint8Array((instance.exports.mem as WebAssembly.Memory).buffer);
 
   const main: any = instance.exports.main;
+  const runningTime = "Program finished in";
+  console.time(runningTime)
+
   main();
+
+  console.timeEnd(runningTime);
 }
