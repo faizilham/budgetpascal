@@ -16,7 +16,7 @@
   "targets": {
     "cmd": {
       "context": "node",
-      "source": "src-cmd/index.ts",
+      "source": ["src-cmd/index.js", "src-cmd/runner.js"],
       "outputFormat": "commonjs",
       "sourceMap": false
     },

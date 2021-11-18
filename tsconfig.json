@@ -1,5 +1,5 @@
 {
-  "include": ["src/**/*", "src-web/**/*", "src-cmd/index.ts"],
+  "include": ["src/**/*", "src-web/**/*", "src-cmd/**/*"],
   "compilerOptions": {
     /* Visit https://aka.ms/tsconfig.json to read more about this file */
 
