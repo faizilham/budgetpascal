@@ -1,4 +1,4 @@
-import { compile } from "../compiler";
+import { compile } from "../src/";
 import fs from "fs";
 
 const debugWasm = true;
