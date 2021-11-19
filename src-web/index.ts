@@ -1,6 +1,5 @@
 import { compileCode, runCode } from "./builder";
 
-import {Terminal} from "xterm";
 import "xterm/css/xterm.css";
 
 import CodeMirror from "codemirror";
@@ -8,6 +7,7 @@ import "codemirror/lib/codemirror.css";
 import "codemirror/theme/material-darker.css";
 import "codemirror/mode/pascal/pascal.js";
 import "./style/main.scss"
+import { TerminalUI } from "./terminal_ui";
 
 function init() {
   const editor = createEditor();
@@ -31,18 +31,10 @@ function createTerminal() {
   const container = document.getElementById("xterm-container") as HTMLElement;
   container.replaceChildren(); // clean content;
 
-  const terminal = new Terminal({
-    theme: {background: "#222", cursor: "#222"},
-    fontFamily: "'Consolas', monospace",
-    cursorStyle: "bar",
-  });
-  terminal.open(container);
-
-
-  return terminal;
+  return new TerminalUI(container);
 }
 
-function initCompileButton(editor: CodeMirror.Editor, terminal: Terminal) {
+function initCompileButton(editor: CodeMirror.Editor, terminal: TerminalUI) {
   const compileButton = document.getElementById("btn-compile") as HTMLElement;
 
   compileButton.addEventListener("click", () => {

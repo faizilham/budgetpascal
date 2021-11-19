@@ -19,12 +19,13 @@ export function compileCode(code, terminal, cached = true) {
   } else {
     terminal.writeln("Compiling...");
     binary = compile(code, logger);
+
+    if (binary) {
+      cache.code = code;
+      cache.binary = binary;
+    }
   }
 
-  if (binary) {
-    cache.code = code;
-    cache.binary = binary;
-  }
 
   return binary;
 }
@@ -32,17 +33,14 @@ export function compileCode(code, terminal, cached = true) {
 export function runCode(binary, terminal) {
   terminal.writeln("Running...");
 
-  const iobuffer = new Uint8Array(new SharedArrayBuffer(1064));
+  const iobuffer = new Int32Array(new SharedArrayBuffer(1064));
   const wasmModule = new WebAssembly.Module(binary);
 
-  const worker = new Worker(new URL('runner.js', import.meta.url));
-  worker.addEventListener('message', (event) => {
-    const msg = event.data;
+  const worker = new Worker(new URL('runner.js', import.meta.url), {type: "module"});
 
-    switch(msg?.command) {
-      case "write": terminal.write(msg.data); break;
-    }
-  })
+  terminal.registerRunner(iobuffer, worker);
+  worker.addEventListener("error", err => console.error(err));
 
   worker.postMessage({iobuffer, wasmModule});
+  terminal.focus();
 }

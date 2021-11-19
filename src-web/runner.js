@@ -1,39 +1,24 @@
-let iobuffer;
-let memory;
+import {createImports} from "../src/import_object";
 
-const sendMessage = (command, data) => {
+const sendCommand = (command, data) => {
   self.postMessage({command, data});
 };
 
-const importObject = {
-  rtl: {
-    $putint: (n, mode) => {
-      switch(mode) {
-        case 1: sendMessage("write", String.fromCharCode(n)); break;
-        case 2: sendMessage("write", n === 0 ? "FALSE" : "TRUE"); break;
-        default:
-          sendMessage("write", n.toString());
-      }
-    },
-    $putreal: (x) => { sendMessage("write", x.toExponential()); },
-    $putln: () => { sendMessage("write", "\r\n"); },
-    $putstr: (addr) => {
-      const start = addr + 1;
-      const end = start + memory[addr];
-
-      sendMessage("write", memory.slice(start, end));
-    }
-  }
+const runner = {
+  iobuffer: null, sendCommand, memory: null
 };
 
+const importObject = createImports(runner);
+
 function run(iobuffer, wasmModule) {
-  iobuffer = new Uint8Array(iobuffer);
+  runner.iobuffer = iobuffer;
   const instance = new WebAssembly.Instance(wasmModule, importObject);
-  memory = new Uint8Array(instance.exports.mem.buffer);
+  runner.memory = new Uint8Array(instance.exports.mem.buffer);
   instance.exports.main();
+  sendCommand("write", "\nProgram finished.\n");
 }
 
 self.addEventListener('message', (event) => {
-  if (iobuffer) return;
+  if (runner.iobuffer) return;
   run(event.data.iobuffer, event.data.wasmModule);
 });
