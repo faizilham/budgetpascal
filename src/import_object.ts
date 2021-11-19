@@ -5,6 +5,8 @@ interface Runner {
   sendCommand: SendCommand
 }
 
+export class InterruptRuntime extends Error {}
+
 export function createImports(runner: Runner): Object {
   let linebuffer = "";
   const decoder = new TextDecoder();
@@ -16,6 +18,7 @@ export function createImports(runner: Runner): Object {
 
     const length = Atomics.load(runner.iobuffer, 0);
     if (length === 0) return;
+    else if (length < 0) throw new InterruptRuntime();
 
     const result = new Uint8Array(length);
     for (let i = 0; i < length; i++) {

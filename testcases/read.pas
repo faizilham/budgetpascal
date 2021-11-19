@@ -6,6 +6,7 @@ var
   s: string[6];
 
 begin
+  write('input: ');
   readln(a, x, r);
   read(c);
   readln(s);

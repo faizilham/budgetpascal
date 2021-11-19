@@ -398,12 +398,12 @@ export default class LocalEchoController {
   /**
    * Handle input completion
    */
-  handleReadComplete() {
-    if (this.history) {
+  handleReadComplete(interrupted = false) {
+    if (!interrupted && this.history) {
       this.history.push(this._input);
     }
     if (this._activePrompt) {
-      this._activePrompt.resolve(this._input);
+      this._activePrompt.resolve(interrupted ? null : this._input);
       this._activePrompt = null;
     }
     this.term.write("\r\n");
@@ -535,10 +535,8 @@ export default class LocalEchoController {
 
         case "\x03": // CTRL+C
           this.setCursor(this._input.length);
-          this.term.write("^C\r\n" + ((this._activePrompt || {}).prompt || ""));
-          this._input = "";
-          this._cursor = 0;
-          if (this.history) this.history.rewind();
+          this.term.write("^C\r\n");
+          this.handleReadComplete(true);
           break;
       }
 

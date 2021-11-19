@@ -39,7 +39,6 @@ export function runCode(binary, terminal) {
   const worker = new Worker(new URL('runner.js', import.meta.url), {type: "module"});
 
   terminal.registerRunner(iobuffer, worker);
-  worker.addEventListener("error", err => console.error(err));
 
   worker.postMessage({iobuffer, wasmModule});
   terminal.focus();

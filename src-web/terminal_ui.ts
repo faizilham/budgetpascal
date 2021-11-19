@@ -87,13 +87,18 @@ export class TerminalUI {
     let input = await this.localEcho.read(prompt);
     this.showCursor(false);
 
-    input += "\n";
-    const length = input.length;
+    if (input == null) {
+      Atomics.store(iobuffer, 0, -1);
+    } else {
+      input += "\n";
+      const length = input.length;
 
-    Atomics.store(iobuffer, 0, length);
-    for (let i = 0; i < length; i++) {
-      iobuffer[i + 1] = input.charCodeAt(i);
+      Atomics.store(iobuffer, 0, length);
+      for (let i = 0; i < length; i++) {
+        iobuffer[i + 1] = input.charCodeAt(i);
+      }
     }
+
     Atomics.notify(iobuffer, 0, 1);
   }
 }

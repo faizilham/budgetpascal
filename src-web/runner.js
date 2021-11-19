@@ -1,4 +1,4 @@
-import {createImports} from "../src/import_object";
+import {createImports, InterruptRuntime} from "../src/import_object";
 
 const sendCommand = (command, data) => {
   self.postMessage({command, data});
@@ -14,8 +14,16 @@ function run(iobuffer, wasmModule) {
   runner.iobuffer = iobuffer;
   const instance = new WebAssembly.Instance(wasmModule, importObject);
   runner.memory = new Uint8Array(instance.exports.mem.buffer);
-  instance.exports.main();
-  sendCommand("write", "\nProgram finished.\n");
+  try {
+    instance.exports.main();
+    sendCommand("write", "\nProgram finished.\n");
+  } catch (e) {
+    if (e instanceof InterruptRuntime) {
+      sendCommand("write", "\nProgram interrupted.\n");
+    } else {
+      console.error(e);
+    }
+  }
 }
 
 self.addEventListener('message', (event) => {
