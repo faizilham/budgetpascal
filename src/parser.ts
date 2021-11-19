@@ -219,6 +219,11 @@ export class Parser {
       case TokenTag.REPEAT: result = this.repeatUntil(); break;
       case TokenTag.WHILE: result = this.whileDo(); break;
 
+      case TokenTag.READ:
+      case TokenTag.READLN:
+        result = this.readStmt();
+      break;
+
       case TokenTag.WRITE:
       case TokenTag.WRITELN:
         result = this.writeStmt();
@@ -507,6 +512,42 @@ export class Parser {
     }
 
     return new Stmt.LoopControl(token);
+  }
+
+  private readStmt(): Stmt {
+    this.advance();
+    const newline = this.previous.tag === TokenTag.READLN;
+    const targets: Expr.Variable[] = [];
+
+    if (this.match(TokenTag.LEFT_PAREN)){
+      if (!this.check(TokenTag.RIGHT_PAREN)) {
+        do {
+          const exprStart = this.current;
+          const expr = this.expression();
+
+          if (!(expr instanceof Expr.Variable)) {
+            throw this.errorAt(exprStart, "Expect variable");
+          }
+
+          if (!this.isReadable(expr.type)) {
+            throw this.errorAt(exprStart, `Can't read type ${getTypeName(expr.type)} from console`);
+          }
+
+          targets.push(expr);
+        } while (this.match(TokenTag.COMMA));
+      }
+
+      this.consume(TokenTag.RIGHT_PAREN, "Expect ')'.");
+    }
+
+    return new Stmt.Read(targets, newline);
+  }
+
+  private isReadable(type?: PascalType) {
+    if (!type) return false;
+
+    return isString(type) || type === BaseType.Char || type === BaseType.Integer ||
+      type === BaseType.Real;
   }
 
   private repeatUntil(): Stmt {

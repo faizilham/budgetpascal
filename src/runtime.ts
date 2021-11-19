@@ -17,6 +17,12 @@ const importFunctions: {[key: string]: [number, number]} = {
   "rtl.$putreal": [binaryen.f64, binaryen.none],
   "rtl.$putln": [binaryen.none, binaryen.none],
   "rtl.$putstr": [ binaryen.i32, binaryen.none],
+
+  "rtl.$readint": [binaryen.none, binaryen.i32],
+  "rtl.$readchar": [binaryen.none, binaryen.i32],
+  "rtl.$readreal": [binaryen.none, binaryen.f64],
+  "rtl.$readstr": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "rtl.$readln": [binaryen.none, binaryen.none],
 };
 
 export class RuntimeBuilder {
@@ -353,6 +359,31 @@ export class RuntimeBuilder {
   putLn(): number {
     this.importsUsed.add("rtl.$putln");
     return this.wasm.call("rtl.$putln", [], binaryen.none);
+  }
+
+  readInt(): number {
+    this.importsUsed.add("rtl.$readint");
+    return this.wasm.call("rtl.$readint", [], binaryen.i32);
+  }
+
+  readChar(): number {
+    this.importsUsed.add("rtl.$readchar");
+    return this.wasm.call("rtl.$readchar", [], binaryen.i32);
+  }
+
+  readReal(): number {
+    this.importsUsed.add("rtl.$readreal");
+    return this.wasm.call("rtl.$readreal", [], binaryen.f64);
+  }
+
+  readStr(addr: number, maxSize: number): number {
+    this.importsUsed.add("rtl.$readstr");
+    return this.wasm.call("rtl.$readstr", [addr, this.wasm.i32.const(maxSize)], binaryen.none);
+  }
+
+  readLn(): number {
+    this.importsUsed.add("rtl.$readln");
+    return this.wasm.call("rtl.$readln", [], binaryen.none);
   }
 }
 

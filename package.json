@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node dist/cmd/index.js",
     "typecheck": "tsc -p tsconfig.check.json",
-    "build": "yarn typecheck && rimraf dist/cmd && parcel build --no-cache --target cmd",
+    "build": "yarn typecheck && rimraf dist/cmd && parcel build --no-cache --target cmd --no-optimize",
     "start-web": "parcel serve --no-cache --dist-dir dist/web-live --target web",
     "build-web": "yarn typecheck && rimraf dist/web && parcel build --no-cache --target web --detailed-report",
     "test": "mocha -r ts-node/register 'src/tests/*.test.ts'",

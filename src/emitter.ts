@@ -341,6 +341,39 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.currentBlock.push(instr);
   }
 
+  visitRead(stmt: Stmt.Read): void {
+
+    for (let target of stmt.targets) {
+      const entry = target.entry;
+
+      let call;
+      switch(entry.type) {
+        case BaseType.Real:
+          call = this.setVariable(entry, this.runtime.readReal());
+        break;
+        case BaseType.Integer:
+          call = this.setVariable(entry, this.runtime.readInt());
+        break;
+        case BaseType.Char:
+          call = this.setVariable(entry, this.runtime.readChar());
+        break;
+        default: // assumed String type
+        {
+          const type = entry.type as StringType;
+          const addr = this.visitVariable(target);
+          call = this.runtime.readStr(addr, type.size);
+          break;
+        }
+      }
+
+      this.currentBlock.push(call);
+    }
+
+    if (stmt.newline) {
+      this.currentBlock.push(this.runtime.readLn());
+    }
+  }
+
   visitRepeatUntil(stmt: Stmt.RepeatUntil) {
     const prevLoop = this.currentLoop;
     this.currentLoop = this.addLoop();
@@ -379,26 +412,25 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
       return this.setStringVariable(stmt, exprInstr);
     }
 
-    let instr;
+    const instr = this.setVariable(entry, exprInstr);
+    this.currentBlock.push(instr);
+  }
 
+  private setVariable(entry: VariableEntry, exprInstr: number): number {
     switch(entry.level) {
       case VariableLevel.GLOBAL: {
-        instr = this.wasm.global.set(stmt.target.entry.name, exprInstr);
-        break;
+        return this.wasm.global.set(entry.name, exprInstr);
       }
       case VariableLevel.LOCAL: {
-        instr = this.wasm.local.set(entry.index, exprInstr);
-        break;
+        return this.wasm.local.set(entry.index, exprInstr);
       }
       default:
         //TODO: upper variable
         throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
     }
-
-    this.currentBlock.push(instr);
   }
 
-  setStringVariable(stmt: Stmt.SetVariable, sourceExpr: number) {
+  private setStringVariable(stmt: Stmt.SetVariable, sourceExpr: number) {
     const entry = stmt.target.entry;
     const strType = entry.type as StringType;
     let targetAddr;

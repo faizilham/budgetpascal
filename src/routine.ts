@@ -202,6 +202,16 @@ export namespace Stmt {
     }
   }
 
+  export class Read extends Stmt {
+    constructor(public targets: Expr.Variable[], public newline: boolean) {
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitRead(this);
+    }
+  }
+
   export class RepeatUntil extends Stmt {
     constructor(public finishCondition: Expr, public statements: Stmt[]) {
       super();
@@ -245,6 +255,7 @@ export namespace Stmt {
     visitIfElse(stmt: IfElse): T;
     visitIncrement(stmt: Increment): T;
     visitLoopControl(stmt: LoopControl): T;
+    visitRead(stmt: Read): T;
     visitRepeatUntil(stmt: RepeatUntil): T;
     visitSetVariable(stmt: SetVariable): T;
     visitWhileDo(stmt: WhileDo): T;
