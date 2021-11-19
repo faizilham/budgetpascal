@@ -5,8 +5,11 @@ var
   b: string[11];
   c: string;
 
+const
+  helloworld = 'hello world!';
+
 begin
-  writeln('hello world!');
+  writeln(helloworld);
   writeln('test');
   writeln('hello ' + 'world ', 'hello ' + 'test ', 'test ' + 'world');
   a := 'test' + ' string';
@@ -15,7 +18,7 @@ begin
   a := '';
   writeln(a);
 
-  b := 'hello world!';
+  b := helloworld;
   writeln(b);
 
   a := b;

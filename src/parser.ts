@@ -93,7 +93,10 @@ export class Parser {
     const name = this.previous;
     this.consume(TokenTag.EQUAL, "Expect '=' after identifer.");
 
-    this.consumeLiteral("Expect literal value after '='.");
+    const allowedValues = [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.REAL,
+      TokenTag.TRUE, TokenTag.FALSE, TokenTag.STRING];
+
+    this.consumeAny(allowedValues, "Expect literal value after '='.");
     let value = this.previous;
 
     this.consume(TokenTag.SEMICOLON, "Expect ';' after value.");
@@ -359,7 +362,10 @@ export class Parser {
   }
 
   private caseMatchCondition(tempVar: Expr.Variable): Expr {
-    this.consumeLiteral("Expect literal value.");
+    const allowedValues = [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.REAL,
+      TokenTag.TRUE, TokenTag.FALSE, TokenTag.STRING];
+
+    this.consumeAny(allowedValues, "Expect literal value.");
     let startToken = this.previous;
     let startVal = this.literals(startToken);
 
@@ -372,7 +378,7 @@ export class Parser {
       throw this.errorAtPrevious("Invalid range expression.");
     }
 
-    this.consumeLiteral("Expect literal value after '..'.");
+    this.consumeAny(allowedValues, "Expect literal value after '..'.");
     let endToken = this.previous;
     let endVal = this.literals(endToken);
 
@@ -984,13 +990,6 @@ export class Parser {
     }
 
     throw this.errorAtCurrent(errMessage);
-  }
-
-  private consumeLiteral(errMessage: string) {
-    this.consumeAny(
-      [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.REAL, TokenTag.TRUE, TokenTag.FALSE],
-      errMessage);
-    // TODO: string?
   }
 
   private errorAtCurrent(message: string) {
