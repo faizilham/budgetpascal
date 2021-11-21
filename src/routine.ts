@@ -5,25 +5,18 @@ export abstract class Routine {
   // declarations here
   declarations: Decl[] = [];
   identifiers: IdentifierTable;
-  types: {[key: string]: PascalType};
   body: Stmt.Compound | null = null;
 
   constructor(){
     this.identifiers = new IdentifierTable();
-    this.types = {
-      "integer": BaseType.Integer,
-      "boolean": BaseType.Boolean,
-      "char": BaseType.Char,
-      "real": BaseType.Real
-    };
   }
 
   findIdentifier(name: string) {
     return this.identifiers.get(name);
   }
 
-  findType(name: string): PascalType | undefined {
-    return this.types[name];
+  findType(name: string): PascalType | null {
+    return this.identifiers.getType(name);
   }
 }
 
@@ -36,9 +29,15 @@ export class Program extends Routine {
   }
 }
 
+export class Procedure extends Routine {
+  constructor() {
+    super();
+  }
+}
+
 /* Identifier Table */
-export type IdentifierEntry = VariableEntry | ConstantEntry;
-export enum IdentifierType { Constant, Variable }
+export type IdentifierEntry = VariableEntry | ConstantEntry | TypeEntry;
+export enum IdentifierType { Constant, Variable, TypeDef }
 
 export enum VariableLevel { GLOBAL, LOCAL, UPPER }
 
@@ -58,12 +57,23 @@ export interface ConstantEntry {
   value: Token;
 }
 
+export interface TypeEntry {
+  entryType: IdentifierType.TypeDef;
+  type: PascalType
+}
+
 export class IdentifierTable {
-  table: {[key: string]: IdentifierEntry}
-  tempVars: VariableEntry[];
+  private table: {[key: string]: IdentifierEntry}
+  private tempVars: VariableEntry[];
 
   constructor() {
-    this.table = {};
+    this.table = {
+      "integer": {entryType: IdentifierType.TypeDef, type: BaseType.Integer},
+      "boolean": {entryType: IdentifierType.TypeDef, type: BaseType.Boolean},
+      "char": {entryType: IdentifierType.TypeDef, type: BaseType.Char},
+      "real": {entryType: IdentifierType.TypeDef, type: BaseType.Real},
+    };
+
     this.tempVars = [];
   }
 
@@ -126,6 +136,15 @@ export class IdentifierTable {
 
   public get(name: string): IdentifierEntry | null {
     return this.table[name] || null;
+  }
+
+  public getType(name: string): PascalType | null {
+    const entry = this.table[name];
+    if (!entry || entry.entryType !== IdentifierType.TypeDef) {
+      return null
+    }
+
+    return entry.type;
   }
 }
 
