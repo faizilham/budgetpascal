@@ -9,8 +9,11 @@ export enum BaseType {
   Real,
 }
 
-export class StringType {
-  private constructor(public size: number){}
+export class StringType implements MemoryStored {
+  bytesize: number;
+  private constructor(public size: number){
+    this.bytesize = size + 1;
+  }
 
   private static sizes: {[key: number]: StringType} = {};
 
@@ -27,6 +30,10 @@ export class StringType {
 }
 
 export type PascalType = BaseType | StringType;
+
+export interface MemoryStored {
+  bytesize: number
+}
 
 export function isBaseType(type?: PascalType): type is BaseType {
   return !isNaN(type as any);
@@ -50,6 +57,10 @@ export function isString(type?: PascalType): type is StringType {
 
 export function isStringLike(type?: PascalType): boolean {
   return type === BaseType.Char || isString(type);
+}
+
+export function isMemoryStored(type?: PascalType | MemoryStored): type is MemoryStored {
+  return type != null && (type as MemoryStored).bytesize != null;
 }
 
 export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {

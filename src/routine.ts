@@ -58,14 +58,17 @@ export class Subroutine extends Routine{
       initialized: false,
       level: VariableLevel.LOCAL,
       returnVar: true,
-      reserved: false
+      paramVar: false,
+      temporary: false,
+      reserved: false,
+      tempUsed: 0
     };
 
     this.identifiers.addSubroutine(this, true);
   }
 
   addParam(name: string, type: PascalType): VariableEntry | null {
-    const entry = this.identifiers.addVariable(name, type);
+    const entry = this.identifiers.addVariable(name, type, true);
     if (entry) this.params.push(type)
 
     return entry;
@@ -86,7 +89,10 @@ export interface VariableEntry {
   initialized: boolean;
   level: VariableLevel;
   returnVar: boolean; // only used for return var in subroutines
+  paramVar: boolean;
+  temporary: boolean;
   reserved: boolean; // only used for temp variables
+  tempUsed: number; // only used for temp variables
 }
 
 export interface ConstantEntry {
@@ -119,7 +125,7 @@ export class IdentifierTable {
     this.subroutines = [];
   }
 
-  public addVariable(name: string, type: PascalType): VariableEntry | null {
+  public addVariable(name: string, type: PascalType, paramVar = false): VariableEntry | null {
     if (this.table[name] != null) {
       return null;
     }
@@ -132,7 +138,10 @@ export class IdentifierTable {
       initialized: false,
       level: VariableLevel.LOCAL,
       returnVar: false,
-      reserved: false
+      paramVar,
+      temporary: false,
+      reserved: false,
+      tempUsed: 0
     }
     this.table[name] = entry;
     this.variables.push(entry);
@@ -144,7 +153,6 @@ export class IdentifierTable {
     const name = subroutine.name;
     if (self) {
       this.table[name] = subroutine;
-      this.variables.push(subroutine.returnVar);
       return true;
     }
 
@@ -174,7 +182,10 @@ export class IdentifierTable {
       initialized: false,
       level: VariableLevel.LOCAL,
       returnVar: false,
-      reserved: false
+      paramVar: false,
+      temporary: true,
+      reserved: false,
+      tempUsed: 0
     };
 
     this.tempVars.push(entry);

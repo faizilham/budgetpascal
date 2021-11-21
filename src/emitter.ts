@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isString, PascalType, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isString as isMemoryStored, MemoryStored, PascalType, StringType } from "./expression";
 import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -9,10 +9,13 @@ class Context {
   parent?: Context;
   routine: Routine;
   locals: number[];
+  lastLocalIdx: number;
+
   constructor(routine: Routine, parent?: Context) {
     this.routine = routine;
     this.parent = parent;
     this.locals = [];
+    this.lastLocalIdx = 0;
   }
 }
 
@@ -73,7 +76,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       throw new Error("Panic: invalid wasm");
     }
 
+    // console.error(this.wasm.emitText());
     if (optimize) this.wasm.optimize();
+
   }
 
   private buildMemory() {
@@ -138,6 +143,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       throw new UnreachableErr(`Invalid variable type for ${entry.name}.`);
     }
 
+    if (entry.temporary && entry.tempUsed < 1) {
+      return;
+    }
+
     const wasmType = this.getBinaryenType(entry.type);
 
     switch(entry.level) {
@@ -147,35 +156,44 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         break;
       }
       case VariableLevel.LOCAL: {
-          const locals = this.context().locals;
-          entry.index = locals.length;
-          locals.push(wasmType);
+          const ctx = this.context();
+          entry.index = ctx.lastLocalIdx++;
+
+          if (!entry.paramVar) {
+            ctx.locals.push(wasmType);
+          }
         break;
       }
       default:
         throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`); //TODO: upper variable
     }
 
-    if (isString(entry.type)) this.addStringVar(entry, entry.type);
+    if (isMemoryStored(entry.type)) this.addMemoryStoredVar(entry, entry.type);
   }
 
-  private addStringVar(variable: VariableEntry, str: StringType) {
-    const stackTopValue = this.runtime.stackTop()
-    const pushInstr = this.runtime.pushStack(str.size + 1);
+  private addMemoryStoredVar(variable: VariableEntry, obj: MemoryStored) {
+    let address = this.runtime.stackTop()
 
-    // TODO: handle if return var
+    if (variable.returnVar) {
+      // TODO: use callframe instead of stackTop
+      address = this.wasm.i32.sub(address, this.wasm.i32.const(obj.bytesize));
+    }
 
     if (variable.level === VariableLevel.GLOBAL) {
       this.currentBlock.push(
-        this.wasm.global.set(variable.name, stackTopValue)
+        this.wasm.global.set(variable.name, address)
       );
     } else {
       this.currentBlock.push(
-        this.wasm.local.set(variable.index, stackTopValue)
+        this.wasm.local.set(variable.index, address)
       );
     }
 
-    this.currentBlock.push(pushInstr);
+    if (!variable.returnVar) {
+      this.currentBlock.push(
+        this.runtime.pushStack(obj.bytesize)
+      );
+    }
   }
 
   private buildSubroutine(subroutine: Subroutine) {
@@ -183,25 +201,38 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       throw new Error(`Panic: null subroutine body for ${subroutine.name}`);
     }
 
-    // TODO: preserve stack?? at least already done in callStmt
-
     this.startContext(subroutine);
-    this.buildDeclarations(subroutine);
-    const locals = this.context().locals;
-
     this.startBlock();
 
-    subroutine.body.accept(this);
+    const returnVar = subroutine.returnVar;
 
-    const body = this.endBlock();
+    if (isMemoryStored(returnVar.type)) {
+      this.currentBlock.push(this.runtime.pushStack(returnVar.type.bytesize));
+    }
+
+    // TODO: preserve stack
+
+    this.buildDeclarations(subroutine);
+    this.buildVariable(returnVar);
+
+    const locals = this.context().locals;
+
+    subroutine.body.accept(this);
+    const returnType = this.getBinaryenType(subroutine.returnVar.type);
+
+    if (returnType !== binaryen.none) {
+      this.currentBlock.push(
+        this.wasm.local.get(returnVar.index, returnType)
+      );
+    }
+
+    const body = this.endBlock("", false, returnType);
 
     let params = binaryen.none;
     const paramlist = subroutine.params.map((type) => this.getBinaryenType(type));
     if (paramlist.length > 0) {
       params = binaryen.createType(paramlist);
     }
-
-    const returnType = this.getBinaryenType(subroutine.returnVar.type);
 
     this.wasm.addFunction(subroutine.absoluteName, params, returnType, locals, body);
     this.endContext();
@@ -262,12 +293,12 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     this.currentBlock = [];
   }
 
-  private endBlock(blockname: string = "", isLoop = false): number {
+  private endBlock(blockname: string = "", isLoop = false, returnType: number = binaryen.none): number {
     let block;
     if (isLoop) {
       block = this.wasm.loop(blockname, this.wasm.block("", this.currentBlock));
     } else {
-      block = this.wasm.block(blockname, this.currentBlock);
+      block = this.wasm.block(blockname, this.currentBlock, returnType);
     }
     const prev = this.prevBlocks.pop();
 
@@ -461,7 +492,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     if (stmt.target.type === BaseType.Real) {
       exprInstr = this.intoReal(stmt.value, exprInstr);
-    } else if (isString(stmt.target.type)) {
+    } else if (isMemoryStored(stmt.target.type)) {
       return this.setStringVariable(stmt, exprInstr);
     }
 
@@ -847,7 +878,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const toType = expr.type;
     if (toType === BaseType.Real && fromType === BaseType.Integer) {
       return this.wasm.f64.convert_s.i32(operand);
-    } else if (isString(toType) && fromType === BaseType.Char) {
+    } else if (isMemoryStored(toType) && fromType === BaseType.Char) {
       return this.runtime.charToStr(operand);
     }
 
@@ -857,7 +888,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
 
   visitLiteral(expr: Expr.Literal): number {
-    if (isString(expr.type)) {
+    if (isMemoryStored(expr.type)) {
       return this.wasm.i32.const(this.getStringAddress(expr.literal));
     }
 

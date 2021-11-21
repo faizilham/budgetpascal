@@ -67,7 +67,11 @@ export class Parser {
       switch(this.current.tag) {
         case TokenTag.CONST: this.constPart(); break;
         case TokenTag.VAR: this.varPart(); break;
-        case TokenTag.PROCEDURE: this.procedureDecl(); break;
+
+        case TokenTag.PROCEDURE:
+        case TokenTag.FUNCTION:
+          this.subroutineDeclaration(); break;
+
         default:
           throw this.errorAtCurrent(`Unknown declaration ${this.current.lexeme}`);
       }
@@ -198,16 +202,25 @@ export class Parser {
     }
   }
 
-  private procedureDecl() {
-    this.advance();
-    this.consume(TokenTag.IDENTIFIER, "Expect procedure name.");
+  private subroutineDeclaration() {
+    const subroutineKind = this.advance();
+    const isFunction = subroutineKind.tag === TokenTag.FUNCTION;
+    const kindName = isFunction ? "function" : "procedure";
+
+    this.consume(TokenTag.IDENTIFIER, `Expect ${kindName} name.`);
     const name = this.previous;
     const params = this.paramsDecl();
 
-    this.consume(TokenTag.SEMICOLON, "Expect ';' after procedure declaration.");
+    let returnType: PascalType = BaseType.Void;
+    if (isFunction) {
+      this.consume(TokenTag.COLON, "Expect ':'.");
+      returnType = this.varType();
+    }
+
+    this.consume(TokenTag.SEMICOLON, `Expect ';' after ${kindName} declaration.`);
 
     const parent = this.currentRoutine;
-    const subroutine = new Subroutine(name.lexeme, BaseType.Void, parent);
+    const subroutine = new Subroutine(name.lexeme, returnType, parent);
 
     if (!parent.identifiers.addSubroutine(subroutine)) {
       throw this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`);
@@ -234,12 +247,15 @@ export class Parser {
 
   private paramsDecl(): VarDeclarationPairs[] {
     const params: VarDeclarationPairs[] = [];
-    this.consume(TokenTag.LEFT_PAREN, "Expect '('.");
-    do {
-      params.push(this.varDeclaration());
-    } while(this.match(TokenTag.SEMICOLON));
+    if (this.match(TokenTag.LEFT_PAREN)) {
+      if (!this.check(TokenTag.RIGHT_PAREN)) {
+        do {
+          params.push(this.varDeclaration());
+        } while(!this.check(TokenTag.RIGHT_PAREN) && this.match(TokenTag.SEMICOLON));
+      }
 
-    this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after parameters.")
+      this.consume(TokenTag.RIGHT_PAREN, "Expect ')'");
+    }
 
     return params;
   }
@@ -247,11 +263,15 @@ export class Parser {
   private reserveTempVariable(type: PascalType): VariableEntry {
     const entry = this.currentRoutine.identifiers.getTempVariable(type);
     entry.reserved = true;
+    entry.tempUsed++;
     return entry;
   }
 
-  private releaseTempVariable(entry: VariableEntry) {
+  private releaseTempVariable(entry: VariableEntry, unused = false) {
     entry.reserved = false;
+    if (unused) {
+      entry.tempUsed--;
+    }
   }
 
   /** Statement **/
@@ -678,14 +698,16 @@ export class Parser {
 
     // handle call statement
     let tempVar = this.reserveTempVariable(BaseType.Integer);
+    let tempNotUsed = true;
     try {
       expr = this.expression();
 
       if (expr instanceof Expr.Call) {
+        tempNotUsed = false;
         return new Stmt.CallStmt(expr, tempVar);
       }
     } finally {
-      this.releaseTempVariable(tempVar)
+      this.releaseTempVariable(tempVar, tempNotUsed);
     }
 
     // handle assignment
