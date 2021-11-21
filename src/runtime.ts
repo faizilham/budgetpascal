@@ -2,7 +2,9 @@ import binaryen from "binaryen";
 
 export namespace Runtime {
   export const DATA_ADDRESS = 0;
-  export const BASE_STACK_ADDRESS = 65536;
+  export const BASE_FRAME_POINTER = 65536;
+  export const MAX_FRAME = 256;
+  export const BASE_STACK_ADDRESS = Runtime.BASE_FRAME_POINTER + Runtime.MAX_FRAME * 4;
 
   export const STACK_POINTER = "@sp";
   export const FRAME_POINTER = "@fp";
@@ -34,11 +36,15 @@ export class RuntimeBuilder {
   buildStack() {
     this.wasm.addGlobal(Runtime.STACK_POINTER, binaryen.i32, true,
       this.wasm.i32.const(Runtime.BASE_STACK_ADDRESS));
+    this.wasm.addGlobal(Runtime.FRAME_POINTER, binaryen.i32, true,
+      this.wasm.i32.const(Runtime.BASE_FRAME_POINTER));
 
     this.wasm.setFeatures(binaryen.Features.BulkMemory);
 
     this.buildPush();
     this.buildPop();
+    this.buildPushFrame();
+    this.buildPopFrame();
     this.buildPreserveStack();
     this.buildCopyString();
     this.buildAppendString();
@@ -119,6 +125,52 @@ export class RuntimeBuilder {
       this.restoreStackTop(this.wasm.local.get(0, binaryen.i32)),
       this.wasm.local.get(1, binaryen.f64)
     ], binaryen.f64));
+  }
+
+  frameTop(): number {
+    return this.wasm.global.get(Runtime.FRAME_POINTER, binaryen.i32);
+  }
+
+  callframeStackTop(): number {
+    // sp relative to frame = mem[fp-4]
+    return this.wasm.i32.load(0, 4,
+      this.wasm.i32.sub(this.frameTop(), this.wasm.i32.const(4)));
+  }
+
+  setFrameTop(expr: number): number {
+    return this.wasm.global.set(Runtime.FRAME_POINTER, expr);
+  }
+
+  pushFrame() {
+    return this.wasm.call("$pushframe", [], binaryen.none);
+  }
+
+  private buildPushFrame() {
+    // mem[fp] = sp; fp += 4
+
+    this.wasm.addFunction("$pushframe", binaryen.none, binaryen.none, [],
+      this.wasm.block("", [
+        this.wasm.i32.store(0, 4, this.frameTop(), this.stackTop()),
+        this.setFrameTop(this.wasm.i32.add(this.frameTop(), this.wasm.i32.const(4)))
+      ])
+    );
+  }
+
+  popFrame() {
+    return this.wasm.call("$popframe", [], binaryen.none);
+  }
+
+  private buildPopFrame() {
+    // fp -= 4; sp = mem[fp]
+
+    this.wasm.addFunction("$popframe", binaryen.none, binaryen.none, [],
+      this.wasm.block("", [
+        this.setFrameTop(this.wasm.i32.sub(this.frameTop(), this.wasm.i32.const(4))),
+        this.restoreStackTop(
+          this.wasm.i32.load(0, 4, this.frameTop())
+        )
+      ])
+    );
   }
 
   debugPrintStackTop(): number {

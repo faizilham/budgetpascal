@@ -59,7 +59,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     this.startContext(this.program);
     this.buildDeclarations(this.program);
+
+    // this.debugPrintStackTop();
     this.program.body.accept(this);
+    // this.debugPrintStackTop();
 
     const body = this.wasm.block("", this.currentBlock);
     const locals = this.context().locals;
@@ -175,8 +178,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     let address = this.runtime.stackTop()
 
     if (variable.returnVar) {
-      // TODO: use callframe instead of stackTop
-      address = this.wasm.i32.sub(address, this.wasm.i32.const(obj.bytesize));
+      address = this.wasm.i32.sub(this.runtime.callframeStackTop(), this.wasm.i32.const(obj.bytesize));
     }
 
     if (variable.level === VariableLevel.GLOBAL) {
@@ -207,10 +209,12 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const returnVar = subroutine.returnVar;
 
     if (isMemoryStored(returnVar.type)) {
+      // return var should be outside of callframe
       this.currentBlock.push(this.runtime.pushStack(returnVar.type.bytesize));
     }
 
-    // TODO: preserve stack
+    // preserve stack using frame ptr
+    this.currentBlock.push(this.runtime.pushFrame());
 
     this.buildDeclarations(subroutine);
     this.buildVariable(returnVar);
@@ -218,6 +222,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const locals = this.context().locals;
 
     subroutine.body.accept(this);
+
+    this.currentBlock.push(this.runtime.popFrame());
+
     const returnType = this.getBinaryenType(subroutine.returnVar.type);
 
     if (returnType !== binaryen.none) {

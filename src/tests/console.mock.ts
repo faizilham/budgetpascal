@@ -30,7 +30,7 @@ export class MockConsole {
           }
         },
         $putreal: (x: number) => { currentline.push(x.toExponential()); },
-        $putln: () => { lines.push(currentline.join("").trim()); currentline = []; },
+        $putln: () => { lines.push(currentline.join("").trimEnd()); currentline = []; },
         $putstr: (addr: number) => {
           const memory = this.memory as Uint8Array;
 
