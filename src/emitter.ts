@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isString as isMemoryStored, MemoryStored, PascalType, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isString as isMemoryStored, isString, MemoryStored, PascalType, StringType } from "./expression";
 import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -179,6 +179,8 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     if (variable.returnVar) {
       address = this.wasm.i32.sub(this.runtime.callframeStackTop(), this.wasm.i32.const(obj.bytesize));
+      this.currentBlock.push(this.wasm.local.set(variable.index, address));
+      return;
     }
 
     if (variable.level === VariableLevel.GLOBAL) {
@@ -186,16 +188,29 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         this.wasm.global.set(variable.name, address)
       );
     } else {
+      if (variable.paramVar) {
+        // TODO: handle const & var
+        const paramValue = this.wasm.local.get(variable.index, binaryen.i32);
+        // copy memory
+        if (isString(obj as PascalType)) {
+          const str = obj as StringType;
+          this.currentBlock.push(
+            this.runtime.copyString(this.runtime.stackTop(), str.size, paramValue)
+          );
+        } else {
+          this.currentBlock.push(
+            this.wasm.memory.copy(this.runtime.stackTop(), paramValue, obj.bytesize)
+          );
+        }
+      }
       this.currentBlock.push(
         this.wasm.local.set(variable.index, address)
       );
     }
 
-    if (!variable.returnVar) {
-      this.currentBlock.push(
-        this.runtime.pushStack(obj.bytesize)
-      );
-    }
+    this.currentBlock.push(
+      this.runtime.pushStack(obj.bytesize)
+    );
   }
 
   private buildSubroutine(subroutine: Subroutine) {

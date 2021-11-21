@@ -36,6 +36,11 @@ program subroutines;
     test_str2 := test_str(false, 'c') + ' ';
   end;
 
+  function test_str3(s1, s2: string[5]): string;
+  begin
+    test_str3 := s1 + ':' + s2;
+  end;
+
   function factorial(n: integer): integer;
   begin
     if n < 1 then factorial := 1;
@@ -49,6 +54,12 @@ program subroutines;
       write(n, ' ');
       recursePrint(n-1);
     end;
+  end;
+
+  function multi(c: char; n: integer): string;
+  begin
+    if n < 1 then multi := '';
+    else multi := c + multi(c, n-1);
   end;
 
 begin
@@ -66,6 +77,9 @@ begin
 
   str += ' ' + test_str2 + test_str(true, 'd');
   writeln(str);
+
+  writeln(test_str3('hello world', 'world hello'));
+  writeln(multi('w', 5));
 
   writeln('5!: ', factorial(5));
   recursePrint(3);
