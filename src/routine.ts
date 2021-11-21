@@ -3,20 +3,26 @@ import { Token } from "./scanner";
 
 export abstract class Routine {
   // declarations here
-  declarations: Decl[] = [];
   identifiers: IdentifierTable;
   body: Stmt.Compound | null = null;
+  parent: Routine | null;
 
-  constructor(){
+  constructor(parent: Routine | null = null){
     this.identifiers = new IdentifierTable();
+    this.parent = parent;
   }
 
-  findIdentifier(name: string) {
-    return this.identifiers.get(name);
+  findIdentifier(name: string): IdentifierEntry | null {
+    const local = this.identifiers.get(name);
+    if (local) return local;
+    // TODO: depth
+    return this.parent && this.parent.findIdentifier(name);
   }
 
   findType(name: string): PascalType | null {
-    return this.identifiers.getType(name);
+    const local = this.identifiers.getType(name);
+    if (local) return local;
+    return this.parent && this.parent.findType(name);
   }
 }
 
@@ -29,15 +35,46 @@ export class Program extends Routine {
   }
 }
 
-export class Procedure extends Routine {
-  constructor() {
-    super();
+export class Subroutine extends Routine{
+  readonly entryType = IdentifierType.Subroutine;
+  params: PascalType[];
+  returnVar: VariableEntry;
+  absoluteName: string;
+  constructor(public name: string, returnType: PascalType, parent: Routine) {
+    super(parent);
+    this.params = [];
+
+    if (parent instanceof Subroutine) {
+      this.absoluteName = `${parent.absoluteName}.${name}`;
+    } else {
+      this.absoluteName = name;
+    }
+
+    this.returnVar = {
+      entryType: IdentifierType.Variable,
+      name,
+      type: returnType,
+      index: 0, // will be set by emitter
+      initialized: false,
+      level: VariableLevel.LOCAL,
+      returnVar: true,
+      reserved: false
+    };
+
+    this.identifiers.addSubroutine(this, true);
+  }
+
+  addParam(name: string, type: PascalType): VariableEntry | null {
+    const entry = this.identifiers.addVariable(name, type);
+    if (entry) this.params.push(type)
+
+    return entry;
   }
 }
 
 /* Identifier Table */
-export type IdentifierEntry = VariableEntry | ConstantEntry | TypeEntry;
-export enum IdentifierType { Constant, Variable, TypeDef }
+export type IdentifierEntry = VariableEntry | ConstantEntry | TypeEntry | Subroutine;
+export enum IdentifierType { Constant, Variable, TypeDef, Subroutine }
 
 export enum VariableLevel { GLOBAL, LOCAL, UPPER }
 
@@ -48,6 +85,7 @@ export interface VariableEntry {
   index: number;
   initialized: boolean;
   level: VariableLevel;
+  returnVar: boolean; // only used for return var in subroutines
   reserved: boolean; // only used for temp variables
 }
 
@@ -65,6 +103,8 @@ export interface TypeEntry {
 export class IdentifierTable {
   private table: {[key: string]: IdentifierEntry}
   private tempVars: VariableEntry[];
+  variables: VariableEntry[];
+  subroutines: Subroutine[];
 
   constructor() {
     this.table = {
@@ -75,6 +115,8 @@ export class IdentifierTable {
     };
 
     this.tempVars = [];
+    this.variables = [];
+    this.subroutines = [];
   }
 
   public addVariable(name: string, type: PascalType): VariableEntry | null {
@@ -89,17 +131,36 @@ export class IdentifierTable {
       index: 0, // will be set by emitter
       initialized: false,
       level: VariableLevel.LOCAL,
+      returnVar: false,
       reserved: false
     }
     this.table[name] = entry;
+    this.variables.push(entry);
 
     return entry;
   }
 
-  public getTempVariable(type: PascalType): [VariableEntry, boolean] {
+  public addSubroutine(subroutine: Subroutine, self: boolean = false): boolean {
+    const name = subroutine.name;
+    if (self) {
+      this.table[name] = subroutine;
+      this.variables.push(subroutine.returnVar);
+      return true;
+    }
+
+    if (this.table[name] != null) {
+      return false;
+    }
+
+    this.table[name] = subroutine;
+    this.subroutines.push(subroutine);
+    return true;
+  }
+
+  public getTempVariable(type: PascalType): VariableEntry {
     for (const temp of this.tempVars) {
       if (!temp.reserved && isTypeEqual(type, temp.type)) {
-        return [temp, true];
+        return temp;
       }
     }
 
@@ -112,11 +173,13 @@ export class IdentifierTable {
       index: 0, // will be set by emitter
       initialized: false,
       level: VariableLevel.LOCAL,
+      returnVar: false,
       reserved: false
     };
 
     this.tempVars.push(entry);
-    return [entry, false];
+    this.variables.push(entry);
+    return entry;
   }
 
   public addConst(name: string, value: Token): ConstantEntry | null {
@@ -148,26 +211,6 @@ export class IdentifierTable {
   }
 }
 
-/* Declaration Tree */
-export abstract class Decl {
-  public abstract accept<T>(visitor: Decl.Visitor<T>): T;
-}
-
-export namespace Decl {
-  export class Variable extends Decl {
-    constructor(public entry: VariableEntry) {
-      super();
-    }
-
-    public accept<T>(visitor: Visitor<T>): T {
-      return visitor.visitVariableDecl(this);
-    }
-  }
-
-  export interface Visitor<T> {
-    visitVariableDecl(decl: Decl.Variable): T
-  }
-}
 
 /* Statement Tree */
 export abstract class Stmt {

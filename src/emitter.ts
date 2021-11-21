@@ -1,7 +1,7 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isString, PascalType, StringType } from "./expression";
-import { Decl, Program, Routine, Stmt, VariableEntry, VariableLevel } from "./routine";
+import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
 
@@ -16,7 +16,7 @@ class Context {
   }
 }
 
-export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.Visitor<void> {
+export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   private wasm: binaryen.Module;
   private currentBlock: number[];
   private prevBlocks: number[][];
@@ -60,15 +60,16 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
     const body = this.wasm.block("", this.currentBlock);
     const locals = this.context().locals;
-    const main = this.wasm.addFunction("main", binaryen.none, binaryen.none, locals, body);
+    this.wasm.addFunction("$main", binaryen.none, binaryen.none, locals, body);
     this.endContext();
 
-    this.wasm.addFunctionExport("main", "main");
+    this.wasm.addFunctionExport("$main", "main");
 
     this.runtime.buildImports();
 
+    console.error(this.wasm.emitText());
     if (!this.wasm.validate()) {
-      // console.error(this.wasm.emitText());
+      console.error("Dump:");
       throw new Error("Panic: invalid wasm");
     }
 
@@ -120,35 +121,28 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
   }
 
   /* Declarations */
-  buildDeclarations(routine: Routine) {
-    for (let decl of routine.declarations) {
-      decl.accept(this);
+  private buildDeclarations(routine: Routine) {
+    for (const variable of routine.identifiers.variables) {
+      this.buildVariable(variable);
+    }
+
+    for (const subroutine of routine.identifiers.subroutines) {
+      this.buildSubroutine(subroutine);
     }
   }
 
-  visitVariableDecl(variable: Decl.Variable) {
-    const entry = variable.entry;
+  private buildVariable(entry: VariableEntry) {
     const name = entry.name;
-    let wasmType, initValue;
-    switch(entry.type) {
-      case BaseType.Boolean:
-      case BaseType.Char:
-      case BaseType.Integer:
-        wasmType = binaryen.i32;
-        initValue = this.wasm.i32.const(0);
-      break;
-      case BaseType.Real:
-        wasmType = binaryen.f64;
-        initValue = this.wasm.f64.const(0);
-      break;
-      default: // other types will be pointers
-        wasmType = binaryen.i32;
-        initValue = this.wasm.i32.const(0);
-      break;
+    if (entry.type === BaseType.Void) {
+      if (entry.returnVar) return;
+      throw new UnreachableErr(`Invalid variable type for ${entry.name}.`);
     }
+
+    const wasmType = this.getBinaryenType(entry.type);
 
     switch(entry.level) {
       case VariableLevel.GLOBAL: {
+        const initValue = wasmType === binaryen.f64 ? this.wasm.f64.const(0) : this.wasm.i32.const(0);
         this.wasm.addGlobal(name, wasmType, true, initValue);
         break;
       }
@@ -159,7 +153,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
         break;
       }
       default:
-        new UnreachableErr(`Unknown variable scope level ${entry.level}.`); //TODO: upper variable
+        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`); //TODO: upper variable
     }
 
     if (isString(entry.type)) this.addStringVar(entry, entry.type);
@@ -182,6 +176,33 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
     this.currentBlock.push(pushInstr);
   }
 
+  private buildSubroutine(subroutine: Subroutine) {
+    if (!subroutine.body) {
+      throw new Error(`Panic: null subroutine body for ${subroutine.name}`);
+    }
+
+    this.startContext(subroutine);
+    this.buildDeclarations(subroutine);
+
+    this.startBlock();
+
+    subroutine.body.accept(this);
+
+    const body = this.endBlock();
+    const locals = this.context().locals;
+
+    let params = binaryen.none;
+    const paramlist = subroutine.params.map((type) => this.getBinaryenType(type));
+    if (paramlist.length > 0) {
+      params = binaryen.createType(paramlist);
+    }
+
+    const returnType = this.getBinaryenType(subroutine.returnVar.type);
+
+    this.wasm.addFunction(subroutine.absoluteName, params, returnType, locals, body);
+    this.endContext();
+  }
+
   private startContext(routine: Routine) {
     const context = new Context(routine, this.currentContext);
     this.currentContext = context;
@@ -193,6 +214,16 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
   private context(): Context {
     return this.currentContext as Context;
+  }
+
+  private getBinaryenType(type: PascalType) {
+    switch(type) {
+      case BaseType.Real: return binaryen.f64;
+      case BaseType.Void: return binaryen.none;
+      default:
+        // int, char, boolean, and pointers are all i32
+        return binaryen.i32;
+    }
   }
 
   /* Statements */
@@ -539,26 +570,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void>, Decl.V
 
   visitVariable(expr: Expr.Variable): number {
     const entry = expr.entry;
-
-    let wasmType;
-    switch(expr.type) {
-      case BaseType.Boolean:
-      case BaseType.Char:
-      case BaseType.Integer:
-        wasmType = binaryen.i32;
-      break;
-      case BaseType.Real:
-        wasmType = binaryen.f64;
-      break;
-      default:{
-        if (isString(expr.type)) {
-          wasmType = binaryen.i32;
-          break;
-        }
-
-        throw new UnreachableErr(`Unknown variable type ${getTypeName(expr.type)}.`);
-      }
-    }
+    const wasmType = this.getBinaryenType(entry.type);
 
     switch(entry.level) {
       case VariableLevel.GLOBAL:

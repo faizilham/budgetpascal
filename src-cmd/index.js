@@ -5,7 +5,7 @@ import { Worker } from "worker_threads";
 
 const debugWasm = true;
 
-let filename = "testcases/read.pas";
+let filename = "testcases/subroutine.pas";
 // let filename = "testcases/errors/syntax_err.pas";
 
 if (process.argv[2]) filename = process.argv[2];

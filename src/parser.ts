@@ -1,7 +1,9 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike } from "./expression";
-import { Decl, IdentifierType, Program, Routine, Stmt, StringTable, VariableEntry, VariableLevel } from "./routine";
+import { IdentifierType, Program, Routine, Stmt, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
+
+type VarDeclarationPairs = [Token[], PascalType];
 
 export class Parser {
   scanner: Scanner;
@@ -65,6 +67,7 @@ export class Parser {
       switch(this.current.tag) {
         case TokenTag.CONST: this.constPart(); break;
         case TokenTag.VAR: this.varPart(); break;
+        case TokenTag.PROCEDURE: this.procedureDecl(); break;
         default:
           throw this.errorAtCurrent(`Unknown declaration ${this.current.lexeme}`);
       }
@@ -110,7 +113,18 @@ export class Parser {
     this.advance();
     do {
       try {
-        this.varDeclaration();
+        const [names, type] = this.varDeclaration();
+        this.consume(TokenTag.SEMICOLON, "Expect ';' after declaration.");
+
+        for (let name of names) {
+          const entry = this.currentRoutine.identifiers.addVariable(name.lexeme, type);
+
+          if (!entry) {
+            this.reportError(
+              this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`)
+            );
+          }
+        }
       } catch (e: any) {
         if (e instanceof ParserError) {
           this.reportError(e);
@@ -122,7 +136,7 @@ export class Parser {
     } while (this.check(TokenTag.IDENTIFIER));
   }
 
-  private varDeclaration() {
+  private varDeclaration(): VarDeclarationPairs {
     const names: Token[] = [];
     do {
       this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
@@ -131,6 +145,12 @@ export class Parser {
     } while (this.check(TokenTag.IDENTIFIER));
 
     this.consume(TokenTag.COLON, "Expect ':' after variable name.");
+    const type = this.varType();
+
+    return [names, type];
+  }
+
+  private varType(): PascalType {
     this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE], "Expect type name.");
     const typeName = this.previous;
 
@@ -156,18 +176,7 @@ export class Parser {
       }
     }
 
-    this.consume(TokenTag.SEMICOLON, "Expect ';' after declaration.");
-
-    for (let name of names) {
-      const entry = this.currentRoutine.identifiers.addVariable(name.lexeme, type);
-      if (!entry) {
-        this.reportError(
-          this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`)
-        );
-        continue;
-      }
-      this.currentRoutine.declarations.push(new Decl.Variable(entry));
-    }
+    return type;
   }
 
   private synchronizeVarConst() {
@@ -189,12 +198,55 @@ export class Parser {
     }
   }
 
-  private reserveTempVariable(type: PascalType): VariableEntry {
-    const [entry, exist] = this.currentRoutine.identifiers.getTempVariable(type);
-    entry.reserved = true;
-    if (!exist){
-      this.currentRoutine.declarations.push(new Decl.Variable(entry));
+  private procedureDecl() {
+    this.advance();
+    this.consume(TokenTag.IDENTIFIER, "Expect procedure name.");
+    const name = this.previous;
+    const params = this.paramsDecl();
+
+    this.consume(TokenTag.SEMICOLON, "Expect ';' after procedure declaration.");
+
+    const parent = this.currentRoutine;
+    const subroutine = new Subroutine(name.lexeme, BaseType.Void, parent);
+
+    if (!parent.identifiers.addSubroutine(subroutine)) {
+      throw this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`);
     }
+
+    for (const [paramNames, type] of params) {
+      for (const paramName of paramNames) {
+        const entry = subroutine.addParam(paramName.lexeme, type);
+        if (!entry) {
+          throw this.errorAt(paramName, `Identifier '${paramName.lexeme}' is already declared in this scope.`);
+        }
+      }
+    }
+
+    try {
+      this.currentRoutine = subroutine;
+      this.declarations();
+      subroutine.body = this.compound();
+      this.consume(TokenTag.SEMICOLON, "Expect ';' after end.");
+    } finally {
+      this.currentRoutine = parent;
+    }
+  }
+
+  private paramsDecl(): VarDeclarationPairs[] {
+    const params: VarDeclarationPairs[] = [];
+    this.consume(TokenTag.LEFT_PAREN, "Expect '('.");
+    do {
+      params.push(this.varDeclaration());
+    } while(this.match(TokenTag.SEMICOLON));
+
+    this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after parameters.")
+
+    return params;
+  }
+
+  private reserveTempVariable(type: PascalType): VariableEntry {
+    const entry = this.currentRoutine.identifiers.getTempVariable(type);
+    entry.reserved = true;
     return entry;
   }
 
@@ -769,7 +821,7 @@ export class Parser {
     const precedence = this.precedence(operator)[2];
     const right = _right || this.parsePrecedence(precedence + 1);
 
-    let exprType: PascalType = BaseType.Void;
+    let exprType: PascalType | null = null;
 
     const errorOperandType = () => {
       const op = operator.lexeme;
@@ -928,7 +980,7 @@ export class Parser {
   private literals(constant?: Token): Expr {
     const token = constant || this.previous;
     let literal: number = 0;
-    let type: PascalType = BaseType.Void;
+    let type: PascalType | null = null;
 
     switch(token.tag) {
       case TokenTag.INTEGER:{
