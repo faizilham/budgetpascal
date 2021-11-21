@@ -5,11 +5,12 @@ import { Worker } from "worker_threads";
 
 const debugWasm = true;
 
-let filename = "testcases/subroutine.pas";
-// let filename = "testcases/errors/syntax_err.pas";
+if (!process.argv[2]){
+  console.error("Usage: yarn start [filename]");
+  process.exit(1);
+}
 
-if (process.argv[2]) filename = process.argv[2];
-
+let filename = process.argv[2];
 runFile(filename);
 
 function runFile(filename) {

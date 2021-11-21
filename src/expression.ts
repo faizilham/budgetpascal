@@ -184,7 +184,7 @@ export namespace Expr {
   }
 
   export class Variable extends Expr {
-    constructor(public entry: VariableEntry){
+    constructor(public entry: VariableEntry, public ownerId: number){
       super();
       this.assignable = true;
       this.type = entry.type;

@@ -6,17 +6,19 @@ export abstract class Routine {
   identifiers: IdentifierTable;
   body: Stmt.Compound | null = null;
   parent: Routine | null;
+  id: number;
 
-  constructor(parent: Routine | null = null){
+  constructor(id: number, parent: Routine | null = null){
     this.identifiers = new IdentifierTable();
     this.parent = parent;
+    this.id = id;
   }
 
-  findIdentifier(name: string): IdentifierEntry | null {
+  findIdentifier(name: string): [IdentifierEntry | null, number] {
     const local = this.identifiers.get(name);
-    if (local) return local;
-    // TODO: depth
-    return this.parent && this.parent.findIdentifier(name);
+    if (local) return [local, this.id];
+    if (!this.parent) return [null, -1];
+    return this.parent.findIdentifier(name);
   }
 
   findType(name: string): PascalType | null {
@@ -31,7 +33,7 @@ export type StringTable = Map<string, number>;
 export class Program extends Routine {
   public stringTable?: StringTable;
   constructor(public name: string) {
-    super();
+    super(0);
   }
 }
 
@@ -40,8 +42,8 @@ export class Subroutine extends Routine{
   params: PascalType[];
   returnVar: VariableEntry;
   absoluteName: string;
-  constructor(public name: string, returnType: PascalType, parent: Routine) {
-    super(parent);
+  constructor(public id: number, public name: string, returnType: PascalType, parent: Routine) {
+    super(id, parent);
     this.params = [];
 
     if (parent instanceof Subroutine) {

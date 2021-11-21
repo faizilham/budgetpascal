@@ -15,6 +15,7 @@ export class Parser {
   logger: ErrLogger.Reporter;
   loopLevel: number;
   stringLiterals: StringTable;
+  functionId: number;
 
   constructor(public text: string, logger?: ErrLogger.Reporter) {
     this.precedenceRule = this.buildPrecedence();
@@ -26,6 +27,7 @@ export class Parser {
     this.currentRoutine = new Program("");
     this.logger = logger || ErrLogger.logger;
     this.loopLevel = 0;
+    this.functionId = 1;
     this.stringLiterals = new Map();
   }
 
@@ -220,7 +222,8 @@ export class Parser {
     this.consume(TokenTag.SEMICOLON, `Expect ';' after ${kindName} declaration.`);
 
     const parent = this.currentRoutine;
-    const subroutine = new Subroutine(name.lexeme, returnType, parent);
+    const id = this.functionId++;
+    const subroutine = new Subroutine(id, name.lexeme, returnType, parent);
 
     if (!parent.identifiers.addSubroutine(subroutine)) {
       throw this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`);
@@ -378,7 +381,7 @@ export class Parser {
     }
 
     const tempVarEntry = this.reserveTempVariable(type);
-    const tempVar = new Expr.Variable(tempVarEntry);
+    const tempVar = new Expr.Variable(tempVarEntry, 0);
 
     let initVarStmt = new Stmt.SetVariable(tempVar, checkValue);
     let root: Stmt.IfElse | null = null;
@@ -515,7 +518,7 @@ export class Parser {
     }
 
     const tempvar = this.reserveTempVariable(iterator.type as PascalType);
-    const finalVariable = new Expr.Variable(tempvar);
+    const finalVariable = new Expr.Variable(tempvar, 0);
 
     // generate finalVariable := finalValue
     initializations.push(new Stmt.SetVariable(finalVariable, finalValue));
@@ -772,14 +775,23 @@ export class Parser {
 
     // TODO: typecast parsing
 
-    const entry = this.currentRoutine.findIdentifier(varToken.lexeme);
+    const [entry, ownerId] = this.currentRoutine.findIdentifier(varToken.lexeme);
     if (!entry) throw this.errorAtPrevious(`Unknown identifier '${varToken.lexeme}'.`);
 
     switch(entry.entryType) {
       case IdentifierType.Constant: return this.literals(entry.value);
       case IdentifierType.Subroutine: return this.callExpr(entry);
       case IdentifierType.Variable: {
-        return new Expr.Variable(entry);
+
+        if (ownerId !== this.currentRoutine.id) {
+          if (ownerId === 0) {
+            entry.level = VariableLevel.GLOBAL;
+          } else {
+            entry.level = VariableLevel.UPPER;
+          }
+        }
+
+        return new Expr.Variable(entry, ownerId);
       };
 
       default:
@@ -792,7 +804,7 @@ export class Parser {
     const [args, hasParentheses] = this.callArgs();
 
     if (!hasParentheses && this.currentRoutine === subroutine) {
-      return new Expr.Variable(subroutine.returnVar);
+      return new Expr.Variable(subroutine.returnVar, 0);
     }
 
     const params = subroutine.params;
