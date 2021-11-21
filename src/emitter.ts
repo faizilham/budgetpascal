@@ -67,9 +67,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     this.runtime.buildImports();
 
-    console.error(this.wasm.emitText());
     if (!this.wasm.validate()) {
       console.error("Dump:");
+      console.error(this.wasm.emitText());
       throw new Error("Panic: invalid wasm");
     }
 
@@ -163,6 +163,8 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const stackTopValue = this.runtime.stackTop()
     const pushInstr = this.runtime.pushStack(str.size + 1);
 
+    // TODO: handle if return var
+
     if (variable.level === VariableLevel.GLOBAL) {
       this.currentBlock.push(
         this.wasm.global.set(variable.name, stackTopValue)
@@ -181,15 +183,17 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       throw new Error(`Panic: null subroutine body for ${subroutine.name}`);
     }
 
+    // TODO: preserve stack?? at least already done in callStmt
+
     this.startContext(subroutine);
     this.buildDeclarations(subroutine);
+    const locals = this.context().locals;
 
     this.startBlock();
 
     subroutine.body.accept(this);
 
     const body = this.endBlock();
-    const locals = this.context().locals;
 
     let params = binaryen.none;
     const paramlist = subroutine.params.map((type) => this.getBinaryenType(type));
@@ -227,6 +231,24 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   /* Statements */
+  visitCallStmt(stmt: Stmt.CallStmt): void {
+    let exprInstr = stmt.callExpr.accept(this);
+
+    if (stmt.callExpr.type !== BaseType.Void) {
+      exprInstr = this.wasm.drop(exprInstr);
+    }
+
+    if (stmt.callExpr.stackNeutral) {
+      this.currentBlock.push(exprInstr);
+    } else {
+      this.currentBlock.push(
+        this.wasm.local.set(stmt.tempVar.index, this.runtime.stackTop()),
+        exprInstr,
+        this.runtime.restoreStackTop(this.wasm.local.get(stmt.tempVar.index, binaryen.i32))
+      );
+    }
+  }
+
   visitCompound(stmt: Stmt.Compound) {
     this.startBlock();
 
@@ -566,6 +588,13 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
 
     return exprInstr;
+  }
+
+  visitCall(expr: Expr.Call): number {
+    const subroutine = expr.callee;
+    const returnType = this.getBinaryenType(subroutine.returnVar.type);
+    const args = expr.args.map((arg) => arg.accept(this));
+    return this.wasm.call(subroutine.absoluteName, args, returnType);
   }
 
   visitVariable(expr: Expr.Variable): number {

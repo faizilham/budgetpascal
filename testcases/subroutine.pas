@@ -15,5 +15,6 @@ program subroutines;
   end;
 
 begin
-
+  printAdd(2, 3);
+  loopPrint(4);
 end.

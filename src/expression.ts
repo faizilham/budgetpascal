@@ -1,4 +1,4 @@
-import { VariableEntry } from "./routine";
+import { Subroutine, VariableEntry } from "./routine";
 import { Token } from "./scanner";
 
 export enum BaseType {
@@ -27,6 +27,10 @@ export class StringType {
 }
 
 export type PascalType = BaseType | StringType;
+
+export function isBaseType(type?: PascalType): type is BaseType {
+  return !isNaN(type as any);
+}
 
 export function isNumberType(type?: PascalType): boolean {
   return type === BaseType.Integer || type === BaseType.Real;
@@ -57,8 +61,9 @@ export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
 }
 
 export function getTypeName(type?: PascalType): string {
+  if (type == null || type === BaseType.Void) return "untyped";
   if (isString(type)) return type.size < 255 ? `String[${type.size}]` : "String";
-  return BaseType[ type || BaseType.Void];
+  return BaseType[type];
 }
 
 export class Range {
@@ -73,6 +78,18 @@ export abstract class Expr {
 }
 
 export namespace Expr {
+  export class Call extends Expr {
+    constructor(public callee: Subroutine, public args: Expr[]){
+      super();
+      this.type = callee.returnVar.type;
+      this.stackNeutral = isBaseType(this.type);
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitCall(this);
+    }
+  }
+
   export class Unary extends Expr {
     constructor(public operator: Token, public operand: Expr){
       super();
@@ -168,6 +185,7 @@ export namespace Expr {
   }
 
   export interface Visitor<T> {
+    visitCall(expr: Call): T;
     visitUnary(expr: Unary): T;
     visitBinary(expr: Binary): T;
     visitLiteral(expr: Literal): T;

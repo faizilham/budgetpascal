@@ -218,6 +218,15 @@ export abstract class Stmt {
 }
 
 export namespace Stmt {
+  export class CallStmt extends Stmt {
+    constructor(public callExpr: Expr.Call, public tempVar: VariableEntry) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitCallStmt(this);
+    }
+  }
+
   export class Compound extends Stmt {
     constructor(public statements: Stmt[]) {
       super();
@@ -312,6 +321,7 @@ export namespace Stmt {
   }
 
   export interface Visitor<T> {
+    visitCallStmt(stmt: CallStmt): T;
     visitCompound(stmt: Compound): T;
     visitForLoop(stmt: ForLoop): T;
     visitIfElse(stmt: IfElse): T;

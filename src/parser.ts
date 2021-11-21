@@ -674,8 +674,21 @@ export class Parser {
   }
 
   private identifierStmt(): Stmt {
-    const expr = this.expression();
+    let expr;
 
+    // handle call statement
+    let tempVar = this.reserveTempVariable(BaseType.Integer);
+    try {
+      expr = this.expression();
+
+      if (expr instanceof Expr.Call) {
+        return new Stmt.CallStmt(expr, tempVar);
+      }
+    } finally {
+      this.releaseTempVariable(tempVar)
+    }
+
+    // handle assignment
     const modifyToken = (tag: TokenTag) => {
       const modifier = this.current.copy();
       modifier.tag = tag;
@@ -699,7 +712,7 @@ export class Parser {
     throw this.errorAtCurrent("Expect assignment or procedure call");
   }
 
-  private assignment(left: Expr, modifier?: Token) : Stmt {
+  private assignment(left: Expr, modifier?: Token): Stmt {
     if (!left.assignable) {
       throw this.errorAtCurrent("Expect variable or array member.");
     }
@@ -742,12 +755,53 @@ export class Parser {
 
     switch(entry.entryType) {
       case IdentifierType.Constant: return this.literals(entry.value);
+      case IdentifierType.Subroutine: return this.callExpr(entry);
       case IdentifierType.Variable: {
         return new Expr.Variable(entry);
       };
+
       default:
         throw new UnreachableErr(`Unknown identifier type for ${entry}`);
     }
+  }
+
+  private callExpr(subroutine: Subroutine): Expr {
+    const subname = this.previous;
+    const [args, hasParentheses] = this.callArgs();
+
+    if (!hasParentheses && this.currentRoutine === subroutine) {
+      return new Expr.Variable(subroutine.returnVar);
+    }
+
+    const params = subroutine.params;
+    if (params.length !== args.length) {
+      throw this.errorAt(subname, `Expect ${params.length} arguments, got ${args.length}.`);
+    }
+
+    for (let i = 0; i < params.length; i++) {
+      if (!isTypeEqual(params[i], args[i].type)) {
+        throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i])}, got ${getTypeName(args[i].type)}`);
+      }
+    }
+
+    return new Expr.Call(subroutine, args);
+  }
+
+  private callArgs(): [Expr[], boolean] {
+    const args: Expr[] = [];
+    let hasParentheses = false;
+    if (this.match(TokenTag.LEFT_PAREN)) {
+      hasParentheses = true;
+      if (!this.check(TokenTag.RIGHT_PAREN)){
+        do {
+          args.push(this.expression());
+        } while(this.match(TokenTag.COMMA));
+      }
+
+      this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after arguments.");
+    }
+
+    return [args, hasParentheses];
   }
 
   private parsePrecedence(precedence: Precedence): Expr {
