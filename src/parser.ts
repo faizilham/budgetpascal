@@ -830,6 +830,8 @@ export class Parser {
     for (let i = 0; i < params.length; i++) {
       if (!isTypeEqual(params[i].type, args[i].type)) {
         throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i].type)}, got ${getTypeName(args[i].type)}`);
+      } else if (params[i].paramType === ParamType.REF && !args[i].assignable) {
+        throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
       }
     }
 

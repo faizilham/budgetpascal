@@ -40,11 +40,13 @@ export class Program extends Routine {
 export class Subroutine extends Routine{
   readonly entryType = IdentifierType.Subroutine;
   params: VariableEntry[];
+  refParams: number[];
   returnVar: VariableEntry;
   absoluteName: string;
   constructor(public id: number, public name: string, returnType: PascalType, parent: Routine) {
     super(id, parent);
     this.params = [];
+    this.refParams = [];
 
     if (parent instanceof Subroutine) {
       this.absoluteName = `${parent.absoluteName}.${name}`;
@@ -81,6 +83,9 @@ export class Subroutine extends Routine{
       entry.paramType = paramType;
       if (paramType === ParamType.CONST) {
         entry.immutable = true;
+      } else if (paramType === ParamType.REF) {
+        // record index of the reference parameter
+        this.refParams.push(this.params.length);
       }
       this.params.push(entry)
     }

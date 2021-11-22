@@ -212,6 +212,13 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     );
   }
 
+  private addNewLocalVar(wasmType: number): number {
+    const context = this.context();
+    const id = context.lastLocalIdx++;
+    context.locals.push(wasmType);
+    return id;
+  }
+
   private addMemoryStoredVar(variable: VariableEntry, obj: MemoryStored) {
     let address = this.runtime.stackTop()
 
@@ -276,6 +283,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     this.startBlock();
 
     const returnVar = subroutine.returnVar;
+    const isFunction = returnVar.type !== BaseType.Void
 
     if (isMemoryStored(returnVar.type)) {
       // return var should be outside of callframe
@@ -292,14 +300,39 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     subroutine.body.accept(this);
 
-    this.currentBlock.push(this.runtime.popFrame());
+    const [returnType, hasRef] = this.getFunctionReturnType(subroutine);
 
-    const returnType = this.getBinaryenType(subroutine.returnVar.type);
+    if (hasRef) {
+      const tuple = [];
 
-    if (returnType !== binaryen.none) {
+      if (isFunction) {
+        tuple.push(this.wasm.local.get(returnVar.index, this.getBinaryenType(returnVar.type)));
+      } else {
+        tuple.push(this.wasm.i32.const(0)); // return dummy value to be dropped
+      }
+
+      for (const idx of subroutine.refParams) {
+        const variable = subroutine.params[idx];
+        tuple.push(
+          this.getVariableValue(variable)
+        );
+      }
+
+      const temp = this.addNewLocalVar(returnType);
+
       this.currentBlock.push(
-        this.wasm.local.get(returnVar.index, returnType)
+        this.wasm.local.set(temp, this.wasm.tuple.make(tuple)),
+        this.runtime.popFrame(),
+        this.wasm.local.get(temp, returnType)
       );
+    } else {
+      this.currentBlock.push(this.runtime.popFrame());
+
+      if (isFunction) {
+        this.currentBlock.push(
+          this.wasm.local.get(returnVar.index, returnType)
+        );
+      }
     }
 
     const body = this.endBlock("", false, returnType);
@@ -335,6 +368,21 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         // int, char, boolean, and pointers are all i32
         return binaryen.i32;
     }
+  }
+
+  private getFunctionReturnType(subroutine: Subroutine): [number, boolean] {
+    let returnType = this.getBinaryenType(subroutine.returnVar.type);
+    if (subroutine.refParams.length === 0) return [returnType, false];
+
+    let refTypes = subroutine.refParams.map((idx) => this.getBinaryenType(subroutine.params[idx].type));
+
+    if (subroutine.returnVar.type !== BaseType.Void){
+      refTypes.unshift(returnType);
+    } else {
+      refTypes.unshift(binaryen.i32);
+    }
+
+    return [binaryen.createType(refTypes), true];
   }
 
   private isLocallyUsed(variable: VariableEntry): boolean {
@@ -519,6 +567,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   visitRead(stmt: Stmt.Read): void {
+    // TODO: handle array & record member
 
     for (let target of stmt.targets) {
       const entry = target.entry;
@@ -583,16 +632,20 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     let exprInstr = this.visitAndPreserveStack(stmt.value);
     // safe to do, since restoring stack top doesn't remove the value from memory
 
-    if (isString(stmt.target.type)) {
-      return this.setStringVariable(stmt, exprInstr);
-    }
-
-    if (stmt.target.type === BaseType.Real) {
-      exprInstr = this.intoReal(stmt.value, exprInstr);
-    }
-
-    const instr = this.setVariable(entry, exprInstr);
+    const instr = this.assignVariable(entry, exprInstr);
     this.currentBlock.push(instr);
+  }
+
+  private assignVariable(entry: VariableEntry, exprInstr: number): number {
+    if (isString(entry.type)) {
+      return this.setStringVariable(entry, exprInstr)
+    }
+
+    if (entry.type === BaseType.Real && binaryen.getExpressionType(exprInstr) === binaryen.i32) {
+      exprInstr = this.wasm.f64.convert_s.i32(exprInstr);
+    }
+
+    return this.setVariable(entry, exprInstr);
   }
 
   private setVariable(entry: VariableEntry, exprInstr: number): number {
@@ -615,13 +668,12 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
   }
 
-  private setStringVariable(stmt: Stmt.SetVariable, sourceExpr: number) {
-    const entry = stmt.target.entry;
+  private setStringVariable(entry: VariableEntry, sourceExpr: number): number {
     const strType = entry.type as StringType;
     let targetAddr;
     switch(entry.level) {
       case VariableLevel.GLOBAL: {
-        targetAddr = this.wasm.global.get(stmt.target.entry.name, binaryen.i32);
+        targetAddr = this.wasm.global.get(entry.name, binaryen.i32);
         break;
       }
       case VariableLevel.LOCAL: {
@@ -634,9 +686,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       }
     }
 
-    const copyInstr = this.runtime.copyString(targetAddr, strType.size, sourceExpr);
-
-    this.currentBlock.push(copyInstr);
+    return this.runtime.copyString(targetAddr, strType.size, sourceExpr);
   }
 
   visitWhileDo(stmt: Stmt.WhileDo)  {
@@ -725,13 +775,52 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   visitCall(expr: Expr.Call): number {
     const subroutine = expr.callee;
-    const returnType = this.getBinaryenType(subroutine.returnVar.type);
+    const [returnType, hasRef] = this.getFunctionReturnType(subroutine);
     const args = expr.args.map((arg) => arg.accept(this));
-    return this.wasm.call(subroutine.absoluteName, args, returnType);
+
+    let callInstr = this.wasm.call(subroutine.absoluteName, args, returnType);
+    if (!hasRef) return callInstr;
+
+    const returnVarId = this.addNewLocalVar(returnType);
+
+    const getTupleValue = (idx: number) => this.wasm.tuple.extract(
+      this.wasm.local.get(returnVarId, returnType), idx)
+
+    let block = [
+      this.wasm.local.set(returnVarId, callInstr)
+    ];
+
+    for (let i = 0; i < subroutine.refParams.length; i++) {
+      const idx = subroutine.refParams[i];
+      const argument = expr.args[idx];
+
+      if (argument instanceof Expr.Variable) {
+        block.push(
+          this.assignVariable(argument.entry, getTupleValue(i + 1))
+        );
+      } else {
+        // TODO: handle array & record member
+        throw new UnreachableErr("Trying asssign unassignable expression in call var param");
+      }
+    }
+
+    let finalReturnType = binaryen.none;
+
+    if (subroutine.returnVar.type !== BaseType.Void) {
+      const finalReturn = getTupleValue(0);
+      finalReturnType = binaryen.getExpressionType(finalReturn);
+      block.push(finalReturn)
+    }
+
+    return this.wasm.block("", block, finalReturnType);
   }
 
   visitVariable(expr: Expr.Variable): number {
     const entry = expr.entry;
+    return this.getVariableValue(entry);
+  }
+
+  getVariableValue(entry: VariableEntry): number {
     const wasmType = this.getBinaryenType(entry.type);
 
     switch(entry.level) {
@@ -745,9 +834,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
         if (isMemoryStored(entry.type)) return address;
         if (wasmType === binaryen.f64) {
-          return this.wasm.f64.load(0, 1, address)
+          return this.wasm.f64.load(0, 1, address);
         } else {
-          return this.wasm.i32.load(0, 1, address);;
+          return this.wasm.i32.load(0, 1, address);
         }
       }
     }

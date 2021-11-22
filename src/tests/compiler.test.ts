@@ -49,4 +49,6 @@ describe("Compiler test", () => {
     async () => runTest("subroutine"));
   it("Generate correct output for 'scoping' program",
     async () => runTest("scoping"));
+  it("Generate correct output for 'constvar_params' program",
+    async () => runTest("constvar_params"));
 })

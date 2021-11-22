@@ -39,7 +39,7 @@ export class RuntimeBuilder {
     this.wasm.addGlobal(Runtime.FRAME_POINTER, binaryen.i32, true,
       this.wasm.i32.const(Runtime.BASE_FRAME_POINTER));
 
-    this.wasm.setFeatures(binaryen.Features.BulkMemory);
+    this.wasm.setFeatures(binaryen.Features.BulkMemory | binaryen.Features.Multivalue);
 
     this.buildPush();
     this.buildPop();
