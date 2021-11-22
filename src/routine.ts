@@ -39,7 +39,7 @@ export class Program extends Routine {
 
 export class Subroutine extends Routine{
   readonly entryType = IdentifierType.Subroutine;
-  params: PascalType[];
+  params: VariableEntry[];
   returnVar: VariableEntry;
   absoluteName: string;
   constructor(public id: number, public name: string, returnType: PascalType, parent: Routine) {
@@ -60,8 +60,10 @@ export class Subroutine extends Routine{
       index: 0, // will be set by emitter
       initialized: false,
       level: VariableLevel.LOCAL,
+      immutable: false,
       returnVar: true,
       paramVar: false,
+      paramType: ParamType.VALUE,
       temporary: false,
       reserved: false,
       tempUsed: 0,
@@ -72,9 +74,16 @@ export class Subroutine extends Routine{
     this.identifiers.addSubroutine(this, true);
   }
 
-  addParam(name: string, type: PascalType): VariableEntry | null {
-    const entry = this.identifiers.addVariable(name, type, this.id, true);
-    if (entry) this.params.push(type)
+  addParam(name: string, type: PascalType, paramType: ParamType): VariableEntry | null {
+    const entry = this.identifiers.addVariable(name, type, this.id);
+    if (entry){
+      entry.paramVar = true;
+      entry.paramType = paramType;
+      if (paramType === ParamType.CONST) {
+        entry.immutable = true;
+      }
+      this.params.push(entry)
+    }
 
     return entry;
   }
@@ -85,6 +94,7 @@ export type IdentifierEntry = VariableEntry | ConstantEntry | TypeEntry | Subrou
 export enum IdentifierType { Constant, Variable, TypeDef, Subroutine }
 
 export enum VariableLevel { GLOBAL, LOCAL, UPPER }
+export enum ParamType { VALUE, CONST, REF }
 
 export interface VariableEntry {
   entryType: IdentifierType.Variable;
@@ -94,8 +104,13 @@ export interface VariableEntry {
   index: number;
   initialized: boolean;
   level: VariableLevel;
+  immutable: boolean;
+
   returnVar: boolean; // only used for return var in subroutines
+
   paramVar: boolean;
+  paramType: ParamType; // only used for parameter vars
+
   temporary: boolean;
   reserved: boolean; // only used for temp variables
   tempUsed: number; // only used for temp variables
@@ -135,7 +150,7 @@ export class IdentifierTable {
     this.subroutines = [];
   }
 
-  public addVariable(name: string, type: PascalType, ownerId: number, paramVar = false): VariableEntry | null {
+  public addVariable(name: string, type: PascalType, ownerId: number): VariableEntry | null {
     if (this.table[name] != null) {
       return null;
     }
@@ -148,8 +163,10 @@ export class IdentifierTable {
       index: 0, // will be set by emitter
       initialized: false,
       level: VariableLevel.LOCAL,
+      immutable: false,
       returnVar: false,
-      paramVar,
+      paramVar: false,
+      paramType: ParamType.VALUE,
       temporary: false,
       reserved: false,
       tempUsed: 0,
@@ -195,8 +212,10 @@ export class IdentifierTable {
       index: 0, // will be set by emitter
       initialized: false,
       level: VariableLevel.LOCAL,
+      immutable: false,
       returnVar: false,
       paramVar: false,
+      paramType: ParamType.VALUE,
       temporary: true,
       reserved: false,
       tempUsed: 0,

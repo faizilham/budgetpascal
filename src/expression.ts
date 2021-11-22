@@ -186,8 +186,8 @@ export namespace Expr {
   export class Variable extends Expr {
     constructor(public entry: VariableEntry){
       super();
-      this.assignable = true;
       this.type = entry.type;
+      this.assignable = !entry.immutable;
       this.stackNeutral = true;
     }
     public accept<T>(visitor: Visitor<T>): T {

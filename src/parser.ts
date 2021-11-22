@@ -1,9 +1,10 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike } from "./expression";
-import { IdentifierType, Program, Routine, Stmt, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
+import { IdentifierType, ParamType, Program, Routine, Stmt, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
 type VarDeclarationPairs = [Token[], PascalType];
+type ParamDeclarationTuple = [Token[], PascalType, ParamType];
 
 export class Parser {
   scanner: Scanner;
@@ -229,9 +230,9 @@ export class Parser {
       throw this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`);
     }
 
-    for (const [paramNames, type] of params) {
+    for (const [paramNames, type, paramType] of params) {
       for (const paramName of paramNames) {
-        const entry = subroutine.addParam(paramName.lexeme, type);
+        const entry = subroutine.addParam(paramName.lexeme, type, paramType);
         if (!entry) {
           throw this.errorAt(paramName, `Identifier '${paramName.lexeme}' is already declared in this scope.`);
         }
@@ -248,12 +249,20 @@ export class Parser {
     }
   }
 
-  private paramsDecl(): VarDeclarationPairs[] {
-    const params: VarDeclarationPairs[] = [];
+  private paramsDecl(): ParamDeclarationTuple[] {
+    const params: ParamDeclarationTuple[] = [];
     if (this.match(TokenTag.LEFT_PAREN)) {
       if (!this.check(TokenTag.RIGHT_PAREN)) {
         do {
-          params.push(this.varDeclaration());
+          let paramType = ParamType.VALUE;
+          if (this.match(TokenTag.CONST)) {
+            paramType = ParamType.CONST;
+          } else if (this.match(TokenTag.VAR)) {
+            paramType = ParamType.REF;
+          }
+
+          const [names, type] = this.varDeclaration();
+          params.push([names, type, paramType]);
         } while(!this.check(TokenTag.RIGHT_PAREN) && this.match(TokenTag.SEMICOLON));
       }
 
@@ -486,6 +495,8 @@ export class Parser {
       throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
     } else if (!isOrdinal(iterator.type)) {
       throw this.errorAtPrevious("Expect variable with ordinal type.");
+    } else if (!iterator.assignable) {
+      throw this.errorAtCurrent("Expect assignable variable.");
     }
 
     const initializations = [];
@@ -541,11 +552,15 @@ export class Parser {
     initializations.push(new Stmt.Increment(iterator, !ascending));
     const increment = new Stmt.Increment(iterator, ascending)
 
+    const iteratorEntry = iterator.entry;
+    const immutability = iteratorEntry.immutable;
     try {
       this.loopLevel++;
+      iteratorEntry.immutable = true;
       const body = this.statement();
       return new Stmt.ForLoop(initializations, condition, increment, body);
     } finally {
+      iteratorEntry.immutable = immutability;
       this.releaseTempVariable(tempvar)
       this.loopLevel--;
     }
@@ -739,7 +754,7 @@ export class Parser {
 
   private assignment(left: Expr, modifier?: Token): Stmt {
     if (!left.assignable) {
-      throw this.errorAtCurrent("Expect variable or array member.");
+      throw this.errorAtCurrent("Expect assignable variable or array member.");
     }
 
     const operator = this.advance();
@@ -813,8 +828,8 @@ export class Parser {
     }
 
     for (let i = 0; i < params.length; i++) {
-      if (!isTypeEqual(params[i], args[i].type)) {
-        throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i])}, got ${getTypeName(args[i].type)}`);
+      if (!isTypeEqual(params[i].type, args[i].type)) {
+        throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i].type)}, got ${getTypeName(args[i].type)}`);
       }
     }
 

@@ -1,7 +1,7 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isMemoryStored, isString, MemoryStored, PascalType, StringType } from "./expression";
-import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
+import { ParamType, Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
 
@@ -227,6 +227,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       );
     } else {
       if (variable.paramVar) {
+        if (variable.paramType === ParamType.CONST && variable.level === VariableLevel.LOCAL) {
+          // optimization: no need to memcopy const var if it's used locally
+          return;
+        }
+
         // TODO: handle const & var
         const paramValue = this.wasm.local.get(variable.index, binaryen.i32);
         // copy memory
@@ -242,9 +247,8 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         }
       }
 
-      this.currentBlock.push(
-        this.wasm.local.set(variable.index, address)
-      );
+      // set address
+      this.currentBlock.push(this.wasm.local.set(variable.index, address));
 
       this.updateOffset(variable, obj.bytesize);
     }
@@ -301,7 +305,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const body = this.endBlock("", false, returnType);
 
     let params = binaryen.none;
-    const paramlist = subroutine.params.map((type) => this.getBinaryenType(type));
+    const paramlist = subroutine.params.map((param) => this.getBinaryenType(param.type));
     if (paramlist.length > 0) {
       params = binaryen.createType(paramlist);
     }
