@@ -47,4 +47,6 @@ describe("Compiler test", () => {
     async () => runTest("strings"));
   it("Generate correct output for 'subroutine' program",
     async () => runTest("subroutine"));
+  it("Generate correct output for 'scoping' program",
+    async () => runTest("scoping"));
 })

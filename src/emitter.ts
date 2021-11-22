@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isString as isMemoryStored, isString, MemoryStored, PascalType, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isMemoryStored, isString, MemoryStored, PascalType, StringType } from "./expression";
 import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -10,12 +10,14 @@ class Context {
   routine: Routine;
   locals: number[];
   lastLocalIdx: number;
+  memoffset: number;
 
   constructor(routine: Routine, parent?: Context) {
     this.routine = routine;
     this.parent = parent;
     this.locals = [];
     this.lastLocalIdx = 0;
+    this.memoffset = 0;
   }
 }
 
@@ -153,6 +155,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const wasmType = this.getBinaryenType(entry.type);
 
     switch(entry.level) {
+      case VariableLevel.UPPER: return this.addUpperVar(entry, wasmType);
       case VariableLevel.GLOBAL: {
         const initValue = wasmType === binaryen.f64 ? this.wasm.f64.const(0) : this.wasm.i32.const(0);
         this.wasm.addGlobal(name, wasmType, true, initValue);
@@ -167,11 +170,46 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
           }
         break;
       }
-      default:
-        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`); //TODO: upper variable
     }
 
-    if (isMemoryStored(entry.type)) this.addMemoryStoredVar(entry, entry.type);
+    if (isMemoryStored(entry.type)) {
+      this.addMemoryStoredVar(entry, entry.type);
+    }
+  }
+
+  private addUpperVar(variable: VariableEntry, wasmType: number) {
+    const ctx = this.context();
+    variable.index = ctx.lastLocalIdx++;
+
+    if (!variable.paramVar) {
+      ctx.locals.push(wasmType);
+    }
+
+    if (isMemoryStored(variable.type)) {
+      return this.addMemoryStoredVar(variable, variable.type);
+    }
+
+    const size = wasmType === binaryen.f64 ? 8 : 4;
+    const value = this.wasm.local.get(variable.index, wasmType);
+
+    if (variable.paramVar) {
+      // store argument to memory
+      const address = this.runtime.stackTop();
+
+      let init;
+      if (wasmType === binaryen.f64) {
+        init = this.wasm.f64.store(0, 1, address, value);
+      } else {
+        init = this.wasm.i32.store(0, 1, address, value);
+      }
+      this.currentBlock.push(init);
+    }
+
+    this.updateOffset(variable, size);
+
+    this.currentBlock.push(
+      this.runtime.pushStack(size)
+    );
   }
 
   private addMemoryStoredVar(variable: VariableEntry, obj: MemoryStored) {
@@ -203,14 +241,26 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
           );
         }
       }
+
       this.currentBlock.push(
         this.wasm.local.set(variable.index, address)
       );
+
+      this.updateOffset(variable, obj.bytesize);
     }
 
     this.currentBlock.push(
       this.runtime.pushStack(obj.bytesize)
     );
+  }
+
+  private updateOffset(variable: VariableEntry, size: number) {
+    const ctx = this.context();
+
+    variable.memsize = size;
+    variable.memoffset = ctx.memoffset;
+
+    ctx.memoffset += size;
   }
 
   private buildSubroutine(subroutine: Subroutine) {
@@ -229,7 +279,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
 
     // preserve stack using frame ptr
-    this.currentBlock.push(this.runtime.pushFrame());
+    this.currentBlock.push(this.runtime.pushFrame(subroutine.id));
 
     this.buildDeclarations(subroutine);
     this.buildVariable(returnVar);
@@ -281,6 +331,23 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         // int, char, boolean, and pointers are all i32
         return binaryen.i32;
     }
+  }
+
+  private isLocallyUsed(variable: VariableEntry): boolean {
+    return variable.ownerId === this.context().routine.id;
+  }
+
+  private resolveUpperVariable(variable: VariableEntry): number {
+    let base;
+    if (this.isLocallyUsed(variable)) {
+      base = this.runtime.callframeStackTop();
+    } else {
+      base = this.runtime.lastCallframeById(variable.ownerId);
+    }
+
+    if (variable.memoffset === 0) return base;
+
+    return this.wasm.i32.add(base, this.wasm.i32.const(variable.memoffset));
   }
 
   /* Statements */
@@ -430,8 +497,8 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         break;
       }
       default:
-        //TODO: upper variable
-        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
+        // NOTE: Currently increment is only used in for loop iterator, so no upper vars
+        throw new UnreachableErr(`Invalid variable scope level ${entry.level}.`);
     }
 
     this.currentBlock.push(instr);
@@ -512,10 +579,12 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     let exprInstr = this.visitAndPreserveStack(stmt.value);
     // safe to do, since restoring stack top doesn't remove the value from memory
 
+    if (isString(stmt.target.type)) {
+      return this.setStringVariable(stmt, exprInstr);
+    }
+
     if (stmt.target.type === BaseType.Real) {
       exprInstr = this.intoReal(stmt.value, exprInstr);
-    } else if (isMemoryStored(stmt.target.type)) {
-      return this.setStringVariable(stmt, exprInstr);
     }
 
     const instr = this.setVariable(entry, exprInstr);
@@ -530,9 +599,15 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       case VariableLevel.LOCAL: {
         return this.wasm.local.set(entry.index, exprInstr);
       }
-      default:
-        //TODO: upper variable
-        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
+      case VariableLevel.UPPER: {
+        const address = this.resolveUpperVariable(entry);
+
+        if (entry.type === BaseType.Real) {
+          return this.wasm.f64.store(0, 1, address, exprInstr);
+        } else {
+          return this.wasm.i32.store(0, 1, address, exprInstr);
+        }
+      }
     }
   }
 
@@ -549,9 +624,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         targetAddr = this.wasm.local.get(entry.index, binaryen.i32);
         break;
       }
-      default:
-        //TODO: upper variable
-        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
+      case VariableLevel.UPPER: {
+        targetAddr = this.resolveUpperVariable(entry);
+        break;
+      }
     }
 
     const copyInstr = this.runtime.copyString(targetAddr, strType.size, sourceExpr);
@@ -660,9 +736,16 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       case VariableLevel.LOCAL: {
         return this.wasm.local.get(entry.index, wasmType);
       }
-      default:
-        //TODO: upper variable
-        throw new UnreachableErr(`Unknown variable scope level ${entry.level}.`);
+      case VariableLevel.UPPER: {
+        const address = this.resolveUpperVariable(entry);
+
+        if (isMemoryStored(entry.type)) return address;
+        if (wasmType === binaryen.f64) {
+          return this.wasm.f64.load(0, 1, address)
+        } else {
+          return this.wasm.i32.load(0, 1, address);;
+        }
+      }
     }
   }
 
@@ -900,7 +983,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const toType = expr.type;
     if (toType === BaseType.Real && fromType === BaseType.Integer) {
       return this.wasm.f64.convert_s.i32(operand);
-    } else if (isMemoryStored(toType) && fromType === BaseType.Char) {
+    } else if (isString(toType) && fromType === BaseType.Char) {
       return this.runtime.charToStr(operand);
     }
 
@@ -910,7 +993,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
 
   visitLiteral(expr: Expr.Literal): number {
-    if (isMemoryStored(expr.type)) {
+    if (isString(expr.type)) {
       return this.wasm.i32.const(this.getStringAddress(expr.literal));
     }
 

@@ -1,0 +1,23 @@
+2 2
+4 3
+10 6
+30 50
+11
+16 11
+howdyworld
+howdypeopl
+outer-a 3 10
+inner 10
+inner 11
+inner 12
+outer-b 3 13
+outer-a 2 9
+inner 9
+inner 10
+inner 11
+outer-b 2 12
+outer-a 1 8
+inner 8
+inner 9
+inner 10
+outer-b 1 11

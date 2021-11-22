@@ -123,7 +123,7 @@ export class Parser {
         this.consume(TokenTag.SEMICOLON, "Expect ';' after declaration.");
 
         for (let name of names) {
-          const entry = this.currentRoutine.identifiers.addVariable(name.lexeme, type);
+          const entry = this.currentRoutine.identifiers.addVariable(name.lexeme, type, this.currentRoutine.id);
 
           if (!entry) {
             this.reportError(
@@ -264,7 +264,7 @@ export class Parser {
   }
 
   private reserveTempVariable(type: PascalType): VariableEntry {
-    const entry = this.currentRoutine.identifiers.getTempVariable(type);
+    const entry = this.currentRoutine.identifiers.getTempVariable(type, this.currentRoutine.id);
     entry.reserved = true;
     entry.tempUsed++;
     return entry;
@@ -381,7 +381,7 @@ export class Parser {
     }
 
     const tempVarEntry = this.reserveTempVariable(type);
-    const tempVar = new Expr.Variable(tempVarEntry, 0);
+    const tempVar = new Expr.Variable(tempVarEntry);
 
     let initVarStmt = new Stmt.SetVariable(tempVar, checkValue);
     let root: Stmt.IfElse | null = null;
@@ -518,7 +518,7 @@ export class Parser {
     }
 
     const tempvar = this.reserveTempVariable(iterator.type as PascalType);
-    const finalVariable = new Expr.Variable(tempvar, 0);
+    const finalVariable = new Expr.Variable(tempvar);
 
     // generate finalVariable := finalValue
     initializations.push(new Stmt.SetVariable(finalVariable, finalValue));
@@ -775,7 +775,7 @@ export class Parser {
 
     // TODO: typecast parsing
 
-    const [entry, ownerId] = this.currentRoutine.findIdentifier(varToken.lexeme);
+    const entry = this.currentRoutine.findIdentifier(varToken.lexeme);
     if (!entry) throw this.errorAtPrevious(`Unknown identifier '${varToken.lexeme}'.`);
 
     switch(entry.entryType) {
@@ -783,15 +783,15 @@ export class Parser {
       case IdentifierType.Subroutine: return this.callExpr(entry);
       case IdentifierType.Variable: {
 
-        if (ownerId !== this.currentRoutine.id) {
-          if (ownerId === 0) {
+        if (entry.ownerId !== this.currentRoutine.id) {
+          if (entry.ownerId === 0) {
             entry.level = VariableLevel.GLOBAL;
           } else {
             entry.level = VariableLevel.UPPER;
           }
         }
 
-        return new Expr.Variable(entry, ownerId);
+        return new Expr.Variable(entry);
       };
 
       default:
@@ -804,7 +804,7 @@ export class Parser {
     const [args, hasParentheses] = this.callArgs();
 
     if (!hasParentheses && this.currentRoutine === subroutine) {
-      return new Expr.Variable(subroutine.returnVar, 0);
+      return new Expr.Variable(subroutine.returnVar);
     }
 
     const params = subroutine.params;

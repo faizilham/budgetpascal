@@ -14,10 +14,10 @@ export abstract class Routine {
     this.id = id;
   }
 
-  findIdentifier(name: string): [IdentifierEntry | null, number] {
+  findIdentifier(name: string): IdentifierEntry | null{
     const local = this.identifiers.get(name);
-    if (local) return [local, this.id];
-    if (!this.parent) return [null, -1];
+    if (local) return local;
+    if (!this.parent) return null;
     return this.parent.findIdentifier(name);
   }
 
@@ -56,6 +56,7 @@ export class Subroutine extends Routine{
       entryType: IdentifierType.Variable,
       name,
       type: returnType,
+      ownerId: id,
       index: 0, // will be set by emitter
       initialized: false,
       level: VariableLevel.LOCAL,
@@ -63,14 +64,16 @@ export class Subroutine extends Routine{
       paramVar: false,
       temporary: false,
       reserved: false,
-      tempUsed: 0
+      tempUsed: 0,
+      memsize: 0,
+      memoffset: 0,
     };
 
     this.identifiers.addSubroutine(this, true);
   }
 
   addParam(name: string, type: PascalType): VariableEntry | null {
-    const entry = this.identifiers.addVariable(name, type, true);
+    const entry = this.identifiers.addVariable(name, type, this.id, true);
     if (entry) this.params.push(type)
 
     return entry;
@@ -87,6 +90,7 @@ export interface VariableEntry {
   entryType: IdentifierType.Variable;
   name: string;
   type: PascalType;
+  ownerId: number;
   index: number;
   initialized: boolean;
   level: VariableLevel;
@@ -95,6 +99,10 @@ export interface VariableEntry {
   temporary: boolean;
   reserved: boolean; // only used for temp variables
   tempUsed: number; // only used for temp variables
+
+  // for Upper Var only
+  memsize: number;
+  memoffset: number;
 }
 
 export interface ConstantEntry {
@@ -127,7 +135,7 @@ export class IdentifierTable {
     this.subroutines = [];
   }
 
-  public addVariable(name: string, type: PascalType, paramVar = false): VariableEntry | null {
+  public addVariable(name: string, type: PascalType, ownerId: number, paramVar = false): VariableEntry | null {
     if (this.table[name] != null) {
       return null;
     }
@@ -136,6 +144,7 @@ export class IdentifierTable {
       entryType: IdentifierType.Variable,
       name,
       type,
+      ownerId,
       index: 0, // will be set by emitter
       initialized: false,
       level: VariableLevel.LOCAL,
@@ -143,7 +152,9 @@ export class IdentifierTable {
       paramVar,
       temporary: false,
       reserved: false,
-      tempUsed: 0
+      tempUsed: 0,
+      memsize: 0,
+      memoffset: 0,
     }
     this.table[name] = entry;
     this.variables.push(entry);
@@ -167,7 +178,7 @@ export class IdentifierTable {
     return true;
   }
 
-  public getTempVariable(type: PascalType): VariableEntry {
+  public getTempVariable(type: PascalType, ownerId: number): VariableEntry {
     for (const temp of this.tempVars) {
       if (!temp.reserved && isTypeEqual(type, temp.type)) {
         return temp;
@@ -180,6 +191,7 @@ export class IdentifierTable {
       entryType: IdentifierType.Variable,
       name,
       type,
+      ownerId,
       index: 0, // will be set by emitter
       initialized: false,
       level: VariableLevel.LOCAL,
@@ -187,7 +199,9 @@ export class IdentifierTable {
       paramVar: false,
       temporary: true,
       reserved: false,
-      tempUsed: 0
+      tempUsed: 0,
+      memsize: 0,
+      memoffset: 0,
     };
 
     this.tempVars.push(entry);

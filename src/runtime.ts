@@ -45,7 +45,9 @@ export class RuntimeBuilder {
     this.buildPop();
     this.buildPushFrame();
     this.buildPopFrame();
+    this.buildLastCallframeById();
     this.buildPreserveStack();
+
     this.buildCopyString();
     this.buildAppendString();
     this.buildCharToStr();
@@ -132,40 +134,90 @@ export class RuntimeBuilder {
   }
 
   callframeStackTop(): number {
-    // sp relative to frame = mem[fp-4]
+    // sp relative to frame = mem[fp-8]
     return this.wasm.i32.load(0, 4,
-      this.wasm.i32.sub(this.frameTop(), this.wasm.i32.const(4)));
+      this.wasm.i32.sub(this.frameTop(), this.wasm.i32.const(8)));
+  }
+
+  lastCallframeById(funcId: number): number {
+    // return last callframe's stack pointer where callframe.id = funcId
+    return this.wasm.call("$lcfid", [this.wasm.i32.const(funcId)], binaryen.i32);
+  }
+
+  private buildLastCallframeById() {
+    // params: 0 funcId; return i32
+    const funcId = 0;
+    const currentPos = 1;
+
+    const wasm = this.wasm;
+
+    const constant = (cons: number) => wasm.i32.const(cons);
+    const getlocal = (id: number) => wasm.local.get(id, binaryen.i32);
+    const setlocal = (id: number, expr: number) => wasm.local.set(id, expr);
+    const subBy = (expr: number, cons: number) => wasm.i32.sub(expr, constant(cons));
+    const decr = (id: number, cons: number) => setlocal(id, subBy(getlocal(id), cons));
+    const getmem = (offset: number, ptr: number) => wasm.i32.load(offset, 4, ptr);
+
+    const looplabel = "$lcfid.loop";
+
+    wasm.addFunction("$lcfid", binaryen.i32, binaryen.i32, [binaryen.i32],
+      wasm.block("", [
+        // currentPos = fp
+        setlocal(currentPos, this.frameTop()),
+        wasm.loop(looplabel, wasm.block("", [
+          // currentPos -= 8
+          decr(currentPos, 8),
+
+          // if currentPos < base_fp return -1
+          wasm.if(wasm.i32.lt_s(getlocal(currentPos), constant(Runtime.BASE_FRAME_POINTER)),
+            wasm.return(constant(-1)) // TODO: exception??
+          ),
+
+          // if mem[currentPos + 4] == funcId
+          wasm.if(wasm.i32.eq(getmem(4, getlocal(currentPos)), getlocal(funcId)),
+            // return mem[currentPos]
+            wasm.return(getmem(0, getlocal(currentPos)))
+          ),
+
+          // loopback
+          wasm.br(looplabel)
+        ]))
+      ])
+    );
   }
 
   setFrameTop(expr: number): number {
     return this.wasm.global.set(Runtime.FRAME_POINTER, expr);
   }
 
-  pushFrame() {
-    return this.wasm.call("$pushframe", [], binaryen.none);
+  pushFrame(funcId: number) {
+    return this.wasm.call("$pushcf", [ this.wasm.i32.const(funcId) ], binaryen.none);
   }
 
   private buildPushFrame() {
-    // mem[fp] = sp; fp += 4
+    // params: 0 funcId
+    // mem[fp] = sp; mem[fp + 4] = funcId; fp += 8
+    const funcId = 0;
 
-    this.wasm.addFunction("$pushframe", binaryen.none, binaryen.none, [],
+    this.wasm.addFunction("$pushcf", binaryen.i32, binaryen.none, [],
       this.wasm.block("", [
         this.wasm.i32.store(0, 4, this.frameTop(), this.stackTop()),
-        this.setFrameTop(this.wasm.i32.add(this.frameTop(), this.wasm.i32.const(4)))
+        this.wasm.i32.store(4, 4, this.frameTop(), this.wasm.local.get(funcId, binaryen.i32)),
+        this.setFrameTop(this.wasm.i32.add(this.frameTop(), this.wasm.i32.const(8)))
       ])
     );
   }
 
   popFrame() {
-    return this.wasm.call("$popframe", [], binaryen.none);
+    return this.wasm.call("$popcf", [], binaryen.none);
   }
 
   private buildPopFrame() {
-    // fp -= 4; sp = mem[fp]
+    // fp -= 8; sp = mem[fp]
 
-    this.wasm.addFunction("$popframe", binaryen.none, binaryen.none, [],
+    this.wasm.addFunction("$popcf", binaryen.none, binaryen.none, [],
       this.wasm.block("", [
-        this.setFrameTop(this.wasm.i32.sub(this.frameTop(), this.wasm.i32.const(4))),
+        this.setFrameTop(this.wasm.i32.sub(this.frameTop(), this.wasm.i32.const(8))),
         this.restoreStackTop(
           this.wasm.i32.load(0, 4, this.frameTop())
         )
