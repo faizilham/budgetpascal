@@ -1,4 +1,4 @@
-import { BaseType, Expr, isTypeEqual, PascalType } from "./expression";
+import { BaseType, Expr, isTypeEqual, PascalType, StringType } from "./expression";
 import { Token } from "./scanner";
 
 export abstract class Routine {
@@ -148,6 +148,7 @@ export class IdentifierTable {
       "boolean": {entryType: IdentifierType.TypeDef, type: BaseType.Boolean},
       "char": {entryType: IdentifierType.TypeDef, type: BaseType.Char},
       "real": {entryType: IdentifierType.TypeDef, type: BaseType.Real},
+      "string": {entryType: IdentifierType.TypeDef, type: StringType.create()}
     };
 
     this.tempVars = [];
@@ -242,7 +243,23 @@ export class IdentifierTable {
       entryType: IdentifierType.Constant,
       name,
       value
+    };
+
+    this.table[name] = entry;
+
+    return entry;
+  }
+
+  public addType(name: string, type: PascalType): TypeEntry | null {
+    if (this.table[name] != null) {
+      return null;
     }
+
+    const entry: TypeEntry = {
+      entryType: IdentifierType.TypeDef,
+      type
+    };
+
     this.table[name] = entry;
 
     return entry;

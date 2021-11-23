@@ -70,6 +70,7 @@ export class Parser {
       switch(this.current.tag) {
         case TokenTag.CONST: this.constPart(); break;
         case TokenTag.VAR: this.varPart(); break;
+        case TokenTag.TYPE: this.typeDefPart(); break;
 
         case TokenTag.PROCEDURE:
         case TokenTag.FUNCTION:
@@ -152,12 +153,12 @@ export class Parser {
     } while (this.check(TokenTag.IDENTIFIER));
 
     this.consume(TokenTag.COLON, "Expect ':' after variable name.");
-    const type = this.varType();
+    const type = this.typeName();
 
     return [names, type];
   }
 
-  private varType(): PascalType {
+  private typeName(): PascalType {
     this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE], "Expect type name.");
     const typeName = this.previous;
 
@@ -205,6 +206,36 @@ export class Parser {
     }
   }
 
+  private typeDefPart() {
+    this.advance();
+    do {
+      try {
+        this.typeDefinition();
+      } catch (e: any) {
+        if (e instanceof ParserError) {
+          this.reportError(e);
+          this.synchronizeVarConst();
+        } else {
+          throw e;
+        }
+      }
+    } while (this.check(TokenTag.IDENTIFIER));
+  }
+
+  private typeDefinition() {
+    this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
+    const name = this.previous;
+    this.consume(TokenTag.EQUAL, "Expect '=' after identifer.");
+
+    const type = this.typeName();
+
+    this.consume(TokenTag.SEMICOLON, "Expect ';' after value.");
+    const result = this.currentRoutine.identifiers.addType(name.lexeme, type);
+    if (!result) {
+      throw this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`);
+    }
+  }
+
   private subroutineDeclaration() {
     const subroutineKind = this.advance();
     const isFunction = subroutineKind.tag === TokenTag.FUNCTION;
@@ -217,7 +248,7 @@ export class Parser {
     let returnType: PascalType = BaseType.Void;
     if (isFunction) {
       this.consume(TokenTag.COLON, "Expect ':'.");
-      returnType = this.varType();
+      returnType = this.typeName();
     }
 
     this.consume(TokenTag.SEMICOLON, `Expect ';' after ${kindName} declaration.`);
