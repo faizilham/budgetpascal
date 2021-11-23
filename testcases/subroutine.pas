@@ -3,6 +3,9 @@ program subroutines;
     sum: integer;
     str: string;
 
+  type
+    string5 = string[5];
+
   procedure printAdd(a, b: integer);
   begin
     writeln(a + b);
@@ -25,8 +28,11 @@ program subroutines;
   function test_str(hello: boolean; c: char): string;
   var test: string[6];
   begin
-    if hello then test := 'hello ';
-    else test := 'bye ';
+    if hello then begin
+      test := 'hello ';
+    end else begin
+      test := 'bye ';
+    end;
 
     test_str := test + c;
   end;
@@ -36,21 +42,25 @@ program subroutines;
     test_str2 := test_str(false, 'c') + ' ';
   end;
 
-  function test_str3(s1, s2: string[5]): string;
+  function test_str3(s1, s2: string5): string;
   begin
     test_str3 := s1 + ':' + s2;
   end;
 
   function factorial(n: integer): integer;
   begin
-    if n < 1 then factorial := 1;
-    else factorial := n * factorial(n - 1);
+    if n < 1 then begin
+      factorial := 1;
+    end else begin
+      factorial := n * factorial(n - 1);
+    end;
   end;
 
   procedure recursePrint(n: integer);
   begin
-    if n < 1 then writeln;
-    else begin
+    if n < 1 then begin
+      writeln;
+    end else begin
       write(n, ' ');
       recursePrint(n-1);
     end;
@@ -58,8 +68,11 @@ program subroutines;
 
   function multi(c: char; n: integer): string;
   begin
-    if n < 1 then multi := '';
-    else multi := c + multi(c, n-1);
+    if n < 1 then begin
+      multi := '';
+    end else begin
+      multi := c + multi(c, n-1);
+    end;
   end;
 
 begin

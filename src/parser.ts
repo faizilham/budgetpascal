@@ -144,7 +144,7 @@ export class Parser {
     } while (this.check(TokenTag.IDENTIFIER));
   }
 
-  private varDeclaration(): VarDeclarationPairs {
+  private varDeclaration(simpleTypesOnly = false): VarDeclarationPairs {
     const names: Token[] = [];
     do {
       this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
@@ -153,31 +153,35 @@ export class Parser {
     } while (this.check(TokenTag.IDENTIFIER));
 
     this.consume(TokenTag.COLON, "Expect ':' after variable name.");
-    const type = this.typeName();
+    const type = this.typeName(simpleTypesOnly);
 
     return [names, type];
   }
 
-  private typeName(): PascalType {
+  private typeName(identiferOnly = false): PascalType {
     this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE], "Expect type name.");
     const typeName = this.previous;
 
-    let type
-    if (typeName.tag === TokenTag.STRING_TYPE) {
-      let length = 255;
+    let type: PascalType | null = null;
+    if (!identiferOnly) {
+      if (typeName.tag === TokenTag.STRING_TYPE) {
+        let length = 255;
 
-      if (this.match(TokenTag.LEFT_SQUARE)) {
-        this.consume(TokenTag.INTEGER, "Expect string length");
-        length = this.previous.literal as number;
-        this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
+        if (this.match(TokenTag.LEFT_SQUARE)) {
+          this.consume(TokenTag.INTEGER, "Expect string length");
+          length = this.previous.literal as number;
+          this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
 
-        if (length > 255) {
-          throw this.errorAt(typeName, "String size can't be larger than 255.");
+          if (length > 255) {
+            throw this.errorAt(typeName, "String size can't be larger than 255.");
+          }
         }
-      }
 
-      type = StringType.create(length);
-    } else {
+        type = StringType.create(length);
+      }
+    }
+
+    if (type == null) {
       type = this.currentRoutine.findType(typeName.lexeme);
       if (type == null) {
         throw this.errorAt(typeName, `Unknown type '${typeName.lexeme}'.`);
@@ -248,7 +252,7 @@ export class Parser {
     let returnType: PascalType = BaseType.Void;
     if (isFunction) {
       this.consume(TokenTag.COLON, "Expect ':'.");
-      returnType = this.typeName();
+      returnType = this.typeName(true);
     }
 
     this.consume(TokenTag.SEMICOLON, `Expect ';' after ${kindName} declaration.`);
@@ -292,7 +296,7 @@ export class Parser {
             paramType = ParamType.REF;
           }
 
-          const [names, type] = this.varDeclaration();
+          const [names, type] = this.varDeclaration(true);
           params.push([names, type, paramType]);
         } while(!this.check(TokenTag.RIGHT_PAREN) && this.match(TokenTag.SEMICOLON));
       }
@@ -821,14 +825,13 @@ export class Parser {
   private variable(): Expr {
     const varToken = this.previous;
 
-    // TODO: typecast parsing
-
     const entry = this.currentRoutine.findIdentifier(varToken.lexeme);
     if (!entry) throw this.errorAtPrevious(`Unknown identifier '${varToken.lexeme}'.`);
 
     switch(entry.entryType) {
       case IdentifierType.Constant: return this.literals(entry.value);
       case IdentifierType.Subroutine: return this.callExpr(entry);
+      case IdentifierType.TypeDef: return this.typecast(entry.type);
       case IdentifierType.Variable: {
 
         if (entry.ownerId !== this.currentRoutine.id) {
@@ -882,6 +885,27 @@ export class Parser {
     }
 
     return [args, hasParentheses];
+  }
+
+  private typecast(targetType: PascalType): Expr {
+    const startToken = this.previous;
+    this.consume(TokenTag.LEFT_PAREN, "Expect '(' after type name.");
+    const expr = this.expression();
+    const fromType = expr.type;
+    this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after expression.");
+
+    if (isTypeEqual(targetType, fromType)) return expr;
+
+    let valid = false;
+    valid ||= (targetType === BaseType.Real && isOrdinal(fromType));
+    valid ||= (isString(targetType) && fromType === BaseType.Char);
+    valid ||= (isOrdinal(targetType) && isOrdinal(fromType));
+
+    if (!valid) {
+      throw this.errorAt(startToken, `Invalid typecast from "${getTypeName(fromType)}" to "${getTypeName(targetType)}".`);
+    }
+
+    return new Expr.Typecast(expr, targetType);
   }
 
   private parsePrecedence(precedence: Precedence): Expr {

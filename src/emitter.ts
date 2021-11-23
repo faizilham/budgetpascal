@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isMemoryStored, isString, MemoryStored, PascalType, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isMemoryStored, isOrdinal, isString, MemoryStored, PascalType, StringType } from "./expression";
 import { ParamType, Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -1053,10 +1053,13 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const operand = expr.operand.accept(this);
     const fromType = expr.operand.type;
     const toType = expr.type;
-    if (toType === BaseType.Real && fromType === BaseType.Integer) {
+    if (toType === BaseType.Real && isOrdinal(fromType)) {
       return this.wasm.f64.convert_s.i32(operand);
     } else if (isString(toType) && fromType === BaseType.Char) {
       return this.runtime.charToStr(operand);
+    } else if (toType === BaseType.Boolean) {
+      // make sure boolean value always 0 or 1
+      return this.wasm.i32.ne(operand, this.wasm.i32.const(0));
     }
 
     // other typecasts should be between chars, int, and bool
