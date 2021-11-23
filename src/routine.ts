@@ -98,7 +98,7 @@ export class Subroutine extends Routine{
 export type IdentifierEntry = VariableEntry | ConstantEntry | TypeEntry | Subroutine;
 export enum IdentifierType { Constant, Variable, TypeDef, Subroutine }
 
-export enum VariableLevel { GLOBAL, LOCAL, UPPER }
+export enum VariableLevel { LOCAL, UPPER }
 export enum ParamType { VALUE, CONST, REF }
 
 export interface VariableEntry {

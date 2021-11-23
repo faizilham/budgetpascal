@@ -491,7 +491,7 @@ export class Parser {
 
     if (!(iterator instanceof Expr.Variable)) {
       throw this.errorAtPrevious(`Expect variable in a for loop.`);
-    } else if (iterator.entry.level === VariableLevel.UPPER) {
+    } else if (iterator.entry.level === VariableLevel.UPPER && iterator.entry.ownerId !== 0) {
       throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
     } else if (!isOrdinal(iterator.type)) {
       throw this.errorAtPrevious("Expect variable with ordinal type.");
@@ -615,6 +615,7 @@ export class Parser {
           const exprStart = this.current;
           const expr = this.expression();
 
+          // TODO: handle array & record member
           if (!(expr instanceof Expr.Variable)) {
             throw this.errorAt(exprStart, "Expect variable");
           }
@@ -774,6 +775,7 @@ export class Parser {
       }
     }
 
+    // TODO: handle array & record member
     const target = left as Expr.Variable;
 
     return new Stmt.SetVariable(target, right);
@@ -799,11 +801,7 @@ export class Parser {
       case IdentifierType.Variable: {
 
         if (entry.ownerId !== this.currentRoutine.id) {
-          if (entry.ownerId === 0) {
-            entry.level = VariableLevel.GLOBAL;
-          } else {
-            entry.level = VariableLevel.UPPER;
-          }
+          entry.level = VariableLevel.UPPER;
         }
 
         return new Expr.Variable(entry);

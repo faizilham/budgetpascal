@@ -88,6 +88,10 @@ export class RuntimeBuilder {
     return this.wasm.global.get(Runtime.STACK_POINTER, binaryen.i32);
   }
 
+  stackBase(): number {
+    return this.wasm.i32.const(Runtime.BASE_STACK_ADDRESS);
+  }
+
   restoreStackTop(expr: number): number {
     return this.wasm.global.set(Runtime.STACK_POINTER, expr);
   }

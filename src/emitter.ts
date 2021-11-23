@@ -156,11 +156,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     switch(entry.level) {
       case VariableLevel.UPPER: return this.addUpperVar(entry, wasmType);
-      case VariableLevel.GLOBAL: {
-        const initValue = wasmType === binaryen.f64 ? this.wasm.f64.const(0) : this.wasm.i32.const(0);
-        this.wasm.addGlobal(name, wasmType, true, initValue);
-        break;
-      }
       case VariableLevel.LOCAL: {
           const ctx = this.context();
           entry.index = ctx.lastLocalIdx++;
@@ -228,38 +223,31 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       return;
     }
 
-    if (variable.level === VariableLevel.GLOBAL) {
-      this.currentBlock.push(
-        this.wasm.global.set(variable.name, address)
-      );
-    } else {
-      if (variable.paramVar) {
-        if (variable.paramType === ParamType.CONST && variable.level === VariableLevel.LOCAL) {
-          // optimization: no need to memcopy const var if it's used locally
-          return;
-        }
-
-        // TODO: handle const & var
-        const paramValue = this.wasm.local.get(variable.index, binaryen.i32);
-        // copy memory
-        if (isString(obj as PascalType)) {
-          const str = obj as StringType;
-          this.currentBlock.push(
-            this.runtime.copyString(this.runtime.stackTop(), str.size, paramValue)
-          );
-        } else {
-          this.currentBlock.push(
-            this.wasm.memory.copy(this.runtime.stackTop(), paramValue, obj.bytesize)
-          );
-        }
+    if (variable.paramVar) {
+      if (variable.paramType === ParamType.CONST && variable.level === VariableLevel.LOCAL) {
+        // optimization: no need to memcopy const var if it's used locally
+        return;
       }
 
-      // set address
-      this.currentBlock.push(this.wasm.local.set(variable.index, address));
-
-      this.updateOffset(variable, obj.bytesize);
+      // TODO: handle const & var
+      const paramValue = this.wasm.local.get(variable.index, binaryen.i32);
+      // copy memory
+      if (isString(obj as PascalType)) {
+        const str = obj as StringType;
+        this.currentBlock.push(
+          this.runtime.copyString(this.runtime.stackTop(), str.size, paramValue)
+        );
+      } else {
+        this.currentBlock.push(
+          this.wasm.memory.copy(this.runtime.stackTop(), paramValue, obj.bytesize)
+        );
+      }
     }
 
+    // set address
+    this.currentBlock.push(this.wasm.local.set(variable.index, address));
+
+    this.updateOffset(variable, obj.bytesize);
     this.currentBlock.push(
       this.runtime.pushStack(obj.bytesize)
     );
@@ -391,7 +379,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   private resolveUpperVariable(variable: VariableEntry): number {
     let base;
-    if (this.isLocallyUsed(variable)) {
+    if (variable.ownerId === 0) {
+      base = this.runtime.stackBase();
+    } else if (this.isLocallyUsed(variable)) {
       base = this.runtime.callframeStackTop();
     } else {
       base = this.runtime.lastCallframeById(variable.ownerId);
@@ -538,19 +528,17 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     let instr;
     switch(entry.level) {
-      case VariableLevel.GLOBAL: {
-        instr = this.wasm.global.get(stmt.target.entry.name, binaryen.i32);
-        instr = this.wasm.global.set(stmt.target.entry.name, increment(instr));
-        break;
-      }
       case VariableLevel.LOCAL: {
         instr = this.wasm.local.get(entry.index, binaryen.i32)
         instr = this.wasm.local.set(entry.index, increment(instr));
         break;
       }
-      default:
-        // NOTE: Currently increment is only used in for loop iterator, so no upper vars
-        throw new UnreachableErr(`Invalid variable scope level ${entry.level}.`);
+      case VariableLevel.UPPER: {
+        // should be upper but from "global" level variable (i.e. ownerId == 0)
+        instr = this.getVariableValue(entry);
+        instr = this.setVariable(entry, increment(instr));
+        break;
+      }
     }
 
     this.currentBlock.push(instr);
@@ -650,9 +638,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   private setVariable(entry: VariableEntry, exprInstr: number): number {
     switch(entry.level) {
-      case VariableLevel.GLOBAL: {
-        return this.wasm.global.set(entry.name, exprInstr);
-      }
       case VariableLevel.LOCAL: {
         return this.wasm.local.set(entry.index, exprInstr);
       }
@@ -672,10 +657,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const strType = entry.type as StringType;
     let targetAddr;
     switch(entry.level) {
-      case VariableLevel.GLOBAL: {
-        targetAddr = this.wasm.global.get(entry.name, binaryen.i32);
-        break;
-      }
       case VariableLevel.LOCAL: {
         targetAddr = this.wasm.local.get(entry.index, binaryen.i32);
         break;
@@ -824,8 +805,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const wasmType = this.getBinaryenType(entry.type);
 
     switch(entry.level) {
-      case VariableLevel.GLOBAL:
-        return this.wasm.global.get(entry.name, wasmType)
       case VariableLevel.LOCAL: {
         return this.wasm.local.get(entry.index, wasmType);
       }

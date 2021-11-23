@@ -1,11 +1,27 @@
 program scoping;
 var
-  xyz: integer;
+  xyz, xyz2, idx: integer;
 
   function useXYZ(n: integer): integer;
   begin
     useXYZ := n * xyz;
     xyz += 1;
+  end;
+
+  function useXYZ2(n: integer): integer;
+  begin
+    useXYZ2 := n * xyz2;
+    xyz2 += 1;
+  end;
+
+  procedure forLoopGlobal(n: integer);
+  begin
+    for idx := 1 to n do begin
+      write(idx, ' ');
+    end;
+
+    idx := -1;
+    writeln(idx);
   end;
 
   procedure printXYZ;
@@ -88,11 +104,18 @@ begin
   writeln(useXYZ(2), ' ', xyz);
   writeln(useXYZ(2), ' ', xyz);
 
+  xyz2 := 1;
+  writeln(useXYZ2(2), ' ', xyz, ' ', xyz2);
+  writeln(useXYZ2(2), ' ', xyz, ' ', xyz2);
+
   xyz := 5;
   writeln(useXYZ(2), ' ', xyz);
 
   xyz := 10;
   printXYZ;
+
+  forLoopGlobal(5);
+  writeln(idx);
 
   testUpper(6);
   upperString('howdy');
