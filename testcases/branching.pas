@@ -48,8 +48,8 @@ begin
           8: writeln(8)
         else
           writeln(179)
-        end
-      10..13: writeln(1013);
+        end;
+      10..13: writeln(1013)
     else
       write(#97, #32);
       writeln(a);
@@ -63,6 +63,10 @@ begin
     #100..#102: writeln(456);
   end;
 
+  case c of
+    #92: writeln(92)
+  end;
+
   a := 6;
   i := 0;
   while i < a do begin
@@ -73,7 +77,7 @@ begin
     j := 0;
     while j < a do begin
       j += 1;
-      if j = i then break;
+      if j = i then break
       else if j = 2 then continue;
       write(j, #32);
     end;

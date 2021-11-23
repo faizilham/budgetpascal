@@ -351,7 +351,6 @@ export class Parser {
       case TokenTag.IDENTIFIER: result = this.identifierStmt(); break;
 
       default:
-        // TODO: defaulted to ?
         throw this.errorAtCurrent("Expect statement");
     }
 
@@ -431,18 +430,28 @@ export class Parser {
     let root: Stmt.IfElse | null = null;
     let lastParent: Stmt.IfElse | null = null;
 
-    while (!this.check(TokenTag.ELSE) && !this.check(TokenTag.END) && !this.check(TokenTag.EOF)) {
+    do {
+      const beforeCase = this.previous;
       const casePart = this.caseMatch(tempVar);
       if (!lastParent) {
         lastParent = casePart;
-        root = lastParent;
+        root = casePart;
       } else {
+        if (beforeCase.tag !== TokenTag.SEMICOLON) {
+          throw this.errorAt(beforeCase, "Expect ';' between case bodies");
+        }
         lastParent.elseBody = casePart;
         lastParent = casePart;
       }
-    }
+    } while (!this.check(TokenTag.ELSE) && !this.check(TokenTag.END) && !this.check(TokenTag.EOF));
+
+    const beforeElse = this.previous;
 
     if (this.match(TokenTag.ELSE)) {
+      if (beforeElse.tag === TokenTag.SEMICOLON) {
+        throw this.errorAt(beforeElse, "Semicolons are not allowed before 'else'.");
+      }
+
       const statements = [];
       while(!this.check(TokenTag.END) && !this.check(TokenTag.EOF)) {
         statements.push(this.statement());
@@ -468,13 +477,13 @@ export class Parser {
   private caseMatch(tempVar: Expr.Variable): Stmt.IfElse {
     let caseCondition;
     do {
-      const orOperator = this.previous.copy();
-      orOperator.tag = TokenTag.OR;
-
       let matchExpr = this.caseMatchCondition(tempVar);
       if (!caseCondition) {
         caseCondition = matchExpr;
       } else {
+        // use the comma token as if it was an OR
+        const orOperator = this.previous.copy();
+        orOperator.tag = TokenTag.OR;
         caseCondition = this.binary(caseCondition, orOperator, matchExpr);
       }
     } while(this.match(TokenTag.COMMA));
@@ -618,8 +627,14 @@ export class Parser {
       body = this.statement();
     }
 
+    let beforeElse = this.previous;
+
     let elseBody;
     if (this.match(TokenTag.ELSE)) {
+      if (beforeElse.tag === TokenTag.SEMICOLON) {
+        throw this.errorAt(beforeElse, "Semicolons are not allowed before 'else'.");
+      }
+
       elseBody = this.statement();
     }
 
