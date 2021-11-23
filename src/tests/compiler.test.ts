@@ -34,7 +34,8 @@ const runTest = async (testname: string) => {
   expect(csl.lines.length).to.eq(output.length);
 
   for (let i = 0; i < output.length; i++) {
-    expect(csl.lines[i]).to.eq(output[i]);
+    const errMessage = `Mismatched ouput at line ${i+1}, expect ${output[i]}, got ${csl.lines[i]}.`;
+    expect(csl.lines[i]).to.eq(output[i], errMessage);
   }
 };
 

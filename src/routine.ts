@@ -369,6 +369,15 @@ export namespace Stmt {
     }
   }
 
+  export class SetRefVariable extends Stmt {
+    constructor(public target: Expr.RefVariable, public value: Expr) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitSetRefVariable(this);
+    }
+  }
+
   export class WhileDo extends Stmt {
     constructor(public condition: Expr, public body: Stmt) {
       super();
@@ -398,6 +407,7 @@ export namespace Stmt {
     visitRead(stmt: Read): T;
     visitRepeatUntil(stmt: RepeatUntil): T;
     visitSetVariable(stmt: SetVariable): T;
+    visitSetRefVariable(stmt: SetRefVariable): T;
     visitWhileDo(stmt: WhileDo): T;
     visitWrite(stmt: Write): T;
   }

@@ -152,7 +152,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       return;
     }
 
-    const wasmType = this.getBinaryenType(entry.type);
+    let wasmType = this.getBinaryenType(entry.type);
+    if (entry.paramVar && entry.paramType === ParamType.REF) {
+      wasmType = binaryen.i32;
+    }
 
     switch(entry.level) {
       case VariableLevel.UPPER: return this.addUpperVar(entry, wasmType);
@@ -227,9 +230,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       if (variable.paramType === ParamType.CONST && variable.level === VariableLevel.LOCAL) {
         // optimization: no need to memcopy const var if it's used locally
         return;
+      } else if (variable.paramType === ParamType.REF) {
+        // refParam is just a pointer
+        return;
       }
 
-      // TODO: handle const & var
       const paramValue = this.wasm.local.get(variable.index, binaryen.i32);
       // copy memory
       if (isString(obj as PascalType)) {
@@ -288,39 +293,13 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     subroutine.body.accept(this);
 
-    const [returnType, hasRef] = this.getFunctionReturnType(subroutine);
+    const returnType = this.getBinaryenType(returnVar.type);
+    this.currentBlock.push(this.runtime.popFrame());
 
-    if (hasRef) {
-      const tuple = [];
-
-      if (isFunction) {
-        tuple.push(this.wasm.local.get(returnVar.index, this.getBinaryenType(returnVar.type)));
-      } else {
-        tuple.push(this.wasm.i32.const(0)); // return dummy value to be dropped
-      }
-
-      for (const idx of subroutine.refParams) {
-        const variable = subroutine.params[idx];
-        tuple.push(
-          this.getVariableValue(variable)
-        );
-      }
-
-      const temp = this.addNewLocalVar(returnType);
-
+    if (isFunction) {
       this.currentBlock.push(
-        this.wasm.local.set(temp, this.wasm.tuple.make(tuple)),
-        this.runtime.popFrame(),
-        this.wasm.local.get(temp, returnType)
+        this.wasm.local.get(returnVar.index, returnType)
       );
-    } else {
-      this.currentBlock.push(this.runtime.popFrame());
-
-      if (isFunction) {
-        this.currentBlock.push(
-          this.wasm.local.get(returnVar.index, returnType)
-        );
-      }
     }
 
     const body = this.endBlock("", false, returnType);
@@ -356,21 +335,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         // int, char, boolean, and pointers are all i32
         return binaryen.i32;
     }
-  }
-
-  private getFunctionReturnType(subroutine: Subroutine): [number, boolean] {
-    let returnType = this.getBinaryenType(subroutine.returnVar.type);
-    if (subroutine.refParams.length === 0) return [returnType, false];
-
-    let refTypes = subroutine.refParams.map((idx) => this.getBinaryenType(subroutine.params[idx].type));
-
-    if (subroutine.returnVar.type !== BaseType.Void){
-      refTypes.unshift(returnType);
-    } else {
-      refTypes.unshift(binaryen.i32);
-    }
-
-    return [binaryen.createType(refTypes), true];
   }
 
   private isLocallyUsed(variable: VariableEntry): boolean {
@@ -556,7 +520,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   visitRead(stmt: Stmt.Read): void {
     // TODO: handle array & record member
-
+    // TODO: handle refvariable
     for (let target of stmt.targets) {
       const entry = target.entry;
 
@@ -670,6 +634,26 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     return this.runtime.copyString(targetAddr, strType.size, sourceExpr);
   }
 
+  visitSetRefVariable(stmt: Stmt.SetRefVariable) {
+    let exprInstr = this.visitAndPreserveStack(stmt.value);
+    const address = this.getReferredAddress(stmt.target);
+
+    const type = stmt.target.type;
+
+    let instr;
+    if (isString(type)) {
+      instr = this.runtime.copyString(address, type.size, exprInstr);
+    } else if (type === BaseType.Real) {
+      // TODO: array & records
+
+      instr = this.wasm.f64.store(0, 1, address, exprInstr);
+    } else {
+      instr = this.wasm.i32.store(0, 1, address, exprInstr);
+    }
+
+    this.currentBlock.push(instr);
+  }
+
   visitWhileDo(stmt: Stmt.WhileDo)  {
     const prevLoop = this.currentLoop;
     this.currentLoop = this.addLoop();
@@ -756,44 +740,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   visitCall(expr: Expr.Call): number {
     const subroutine = expr.callee;
-    const [returnType, hasRef] = this.getFunctionReturnType(subroutine);
+    const returnType = this.getBinaryenType(subroutine.returnVar.type);
     const args = expr.args.map((arg) => arg.accept(this));
 
     let callInstr = this.wasm.call(subroutine.absoluteName, args, returnType);
-    if (!hasRef) return callInstr;
-
-    const returnVarId = this.addNewLocalVar(returnType);
-
-    const getTupleValue = (idx: number) => this.wasm.tuple.extract(
-      this.wasm.local.get(returnVarId, returnType), idx)
-
-    let block = [
-      this.wasm.local.set(returnVarId, callInstr)
-    ];
-
-    for (let i = 0; i < subroutine.refParams.length; i++) {
-      const idx = subroutine.refParams[i];
-      const argument = expr.args[idx];
-
-      if (argument instanceof Expr.Variable) {
-        block.push(
-          this.assignVariable(argument.entry, getTupleValue(i + 1))
-        );
-      } else {
-        // TODO: handle array & record member
-        throw new UnreachableErr("Trying asssign unassignable expression in call var param");
-      }
-    }
-
-    let finalReturnType = binaryen.none;
-
-    if (subroutine.returnVar.type !== BaseType.Void) {
-      const finalReturn = getTupleValue(0);
-      finalReturnType = binaryen.getExpressionType(finalReturn);
-      block.push(finalReturn)
-    }
-
-    return this.wasm.block("", block, finalReturnType);
+    return callInstr;
   }
 
   visitVariable(expr: Expr.Variable): number {
@@ -819,6 +770,47 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         }
       }
     }
+  }
+
+  visitRefer(expr: Expr.Refer): number {
+    // TODO: array / record member;
+    const entry = expr.source.entry;
+    if (entry.level !== VariableLevel.UPPER) {
+      throw new UnreachableErr("Trying to refer non-upper variable");
+    }
+
+    const address = this.resolveUpperVariable(entry);
+    return address;
+  }
+
+  visitRefVariable(expr: Expr.RefVariable): number {
+    // assumption: refvariable entry will be set to i32
+    const entry = expr.entry;
+    let address = this.getReferredAddress(expr);
+
+    if (isMemoryStored(entry.type)) {
+      return address;
+    }
+
+    if (entry.type === BaseType.Real) {
+      return this.wasm.f64.load(0, 1, address);
+    }
+
+    return this.wasm.i32.load(0, 1, address);
+  }
+
+  private getReferredAddress(expr: Expr.RefVariable): number {
+    const entry = expr.entry;
+    let address;
+
+    if (entry.level === VariableLevel.LOCAL) {
+      address = this.wasm.local.get(entry.index, binaryen.i32);
+    } else { // VariableLevel.UPPER
+      const entryAddress = this.resolveUpperVariable(entry);
+      address = this.wasm.i32.load(0, 1, entryAddress);
+    }
+
+    return address;
   }
 
   visitUnary(expr: Expr.Unary): number {

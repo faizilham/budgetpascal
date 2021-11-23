@@ -195,6 +195,31 @@ export namespace Expr {
     }
   }
 
+  export class Refer extends Expr {
+    constructor(public source: Expr.Variable) {
+      super();
+      this.type = source.type;
+      this.stackNeutral = source.stackNeutral;
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitRefer(this);
+    }
+  }
+
+  export class RefVariable extends Expr {
+    constructor(public entry: VariableEntry) {
+      super();
+      this.type = entry.type;
+      this.assignable = !entry.immutable;
+      this.stackNeutral = true;
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitRefVariable(this);
+    }
+  }
+
   export interface Visitor<T> {
     visitCall(expr: Call): T;
     visitUnary(expr: Unary): T;
@@ -202,6 +227,8 @@ export namespace Expr {
     visitLiteral(expr: Literal): T;
     visitShortCircuit(expr: ShortCircuit): T;
     visitVariable(expr: Variable): T;
+    visitRefer(expr: Refer): T;
+    visitRefVariable(expr: RefVariable): T;
     visitStringConcat(expr: StringConcat): T;
     visitStringCompare(expr: StringCompare): T;
     visitTypecast(expr: Typecast): T;

@@ -534,7 +534,7 @@ export class Parser {
     const iterator = this.variable();
 
     if (!(iterator instanceof Expr.Variable)) {
-      throw this.errorAtPrevious(`Expect variable in a for loop.`);
+      throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
     } else if (iterator.entry.level === VariableLevel.UPPER && iterator.entry.ownerId !== 0) {
       throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
     } else if (!isOrdinal(iterator.type)) {
@@ -826,9 +826,14 @@ export class Parser {
     }
 
     // TODO: handle array & record member
-    const target = left as Expr.Variable;
 
-    return new Stmt.SetVariable(target, right);
+    if (left instanceof Expr.Variable) {
+      return new Stmt.SetVariable(left, right);
+    } else if (left instanceof Expr.RefVariable) {
+      return new Stmt.SetRefVariable(left, right);
+    }
+
+    throw new UnreachableErr("Unknown assignment target");
   }
 
   /** Expression Parsing **/
@@ -851,6 +856,10 @@ export class Parser {
 
         if (entry.ownerId !== this.currentRoutine.id) {
           entry.level = VariableLevel.UPPER;
+        }
+
+        if (entry.paramVar && entry.paramType === ParamType.REF) {
+          return new Expr.RefVariable(entry);
         }
 
         return new Expr.Variable(entry);
@@ -877,8 +886,15 @@ export class Parser {
     for (let i = 0; i < params.length; i++) {
       if (!isTypeEqual(params[i].type, args[i].type)) {
         throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i].type)}, got ${getTypeName(args[i].type)}`);
-      } else if (params[i].paramType === ParamType.REF && !args[i].assignable) {
-        throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
+      } else if (params[i].paramType === ParamType.REF) {
+        const sourceExpr = args[i];
+        if (sourceExpr instanceof Expr.Variable) {
+          // TODO: array & record member
+          sourceExpr.entry.level = VariableLevel.UPPER;
+          args[i] = new Expr.Refer(sourceExpr);
+        } else {
+          throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
+        }
       }
     }
 
