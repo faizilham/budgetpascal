@@ -892,6 +892,8 @@ export class Parser {
           // TODO: array & record member
           sourceExpr.entry.level = VariableLevel.UPPER;
           args[i] = new Expr.Refer(sourceExpr);
+        } else if (sourceExpr instanceof Expr.RefVariable) {
+          // do nothing
         } else {
           throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
         }

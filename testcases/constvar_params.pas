@@ -47,6 +47,7 @@ program constvar_params;
   end;
 
   var x, y: integer;
+    str1, str2: string;
 
   procedure var_global(var a: integer);
     var m, n: integer;
@@ -62,6 +63,21 @@ program constvar_params;
     inner(n);
     n := 12;
     inner(m);
+  end;
+
+  procedure var_str(var s, s1: string);
+    procedure inner(var s: string);
+    begin
+      s := 'test2';
+      s1 := 'abcde';
+    end;
+  begin
+    writeln(s, ' ', s1);
+    s := 'test';
+    writeln(s, ' ', s1);
+    inner(s);
+    writeln(s, ' ', s1);
+    s := 'qwerty';
   end;
 begin
   test_const(1, 'test');
@@ -83,4 +99,11 @@ begin
   writeln(x, ' ', y);
 
   var_global(x);
+
+
+  str1 := 'hello';
+  str2 := 'world';
+  writeln(str1, ' ', str2);
+  var_str(str1, str2);
+  writeln(str1, ' ', str2);
 end.

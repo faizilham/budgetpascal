@@ -183,7 +183,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       ctx.locals.push(wasmType);
     }
 
-    if (isMemoryStored(variable.type)) {
+    if (variable.paramType !== ParamType.REF && isMemoryStored(variable.type)) {
       return this.addMemoryStoredVar(variable, variable.type);
     }
 
