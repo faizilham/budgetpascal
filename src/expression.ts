@@ -93,7 +93,17 @@ export namespace Expr {
     constructor(public callee: Subroutine, public args: Expr[]){
       super();
       this.type = callee.returnVar.type;
-      this.stackNeutral = isBaseType(this.type);
+      let stackNeutral = isBaseType(this.type);
+      if (stackNeutral) {
+        for (const arg of args) {
+          if (!arg.stackNeutral) {
+            stackNeutral = false;
+            break;
+          }
+        }
+      }
+
+      this.stackNeutral = stackNeutral;
     }
 
     public accept<T>(visitor: Visitor<T>): T {
