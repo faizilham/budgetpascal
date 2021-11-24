@@ -827,6 +827,10 @@ export class Parser {
 
     // TODO: handle array & record member
 
+    if (isString(left.type)){
+      return new Stmt.SetString(left, right);
+    }
+
     if (left instanceof Expr.Variable) {
       return new Stmt.SetVariable(left, right);
     } else if (left instanceof Expr.RefVariable) {
@@ -894,6 +898,7 @@ export class Parser {
           args[i] = new Expr.Refer(sourceExpr);
         } else if (sourceExpr instanceof Expr.RefVariable) {
           // do nothing
+          // TODO: test with non string.
         } else {
           throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
         }

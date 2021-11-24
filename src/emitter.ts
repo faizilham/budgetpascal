@@ -579,6 +579,17 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     this.currentLoop = prevLoop;
   }
 
+  visitSetString(stmt: Stmt.SetString) {
+    let sourceExpr = this.visitAndPreserveStack(stmt.value);
+    let targetAddr = this.visitAndPreserveStack(stmt.target);
+
+    const strType = stmt.target.type as StringType;
+
+    this.currentBlock.push(
+      this.runtime.copyString(targetAddr, strType.size, sourceExpr)
+    );
+  }
+
   visitSetVariable(stmt: Stmt.SetVariable) {
     const entry = stmt.target.entry;
     let exprInstr = this.visitAndPreserveStack(stmt.value);
@@ -589,10 +600,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   private assignVariable(entry: VariableEntry, exprInstr: number): number {
-    if (isString(entry.type)) {
-      return this.setStringVariable(entry, exprInstr)
-    }
-
     if (entry.type === BaseType.Real && binaryen.getExpressionType(exprInstr) === binaryen.i32) {
       exprInstr = this.wasm.f64.convert_s.i32(exprInstr);
     }
@@ -615,23 +622,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         }
       }
     }
-  }
-
-  private setStringVariable(entry: VariableEntry, sourceExpr: number): number {
-    const strType = entry.type as StringType;
-    let targetAddr;
-    switch(entry.level) {
-      case VariableLevel.LOCAL: {
-        targetAddr = this.wasm.local.get(entry.index, binaryen.i32);
-        break;
-      }
-      case VariableLevel.UPPER: {
-        targetAddr = this.resolveUpperVariable(entry);
-        break;
-      }
-    }
-
-    return this.runtime.copyString(targetAddr, strType.size, sourceExpr);
   }
 
   visitSetRefVariable(stmt: Stmt.SetRefVariable) {

@@ -355,6 +355,16 @@ export namespace Stmt {
     }
   }
 
+  export class SetString extends Stmt {
+    constructor(public target: Expr, public value: Expr) {
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitSetString(this);
+    }
+  }
+
   export class SetVariable extends Stmt {
     constructor(public target: Expr.Variable, public value: Expr) {
       super();
@@ -401,6 +411,7 @@ export namespace Stmt {
     visitLoopControl(stmt: LoopControl): T;
     visitRead(stmt: Read): T;
     visitRepeatUntil(stmt: RepeatUntil): T;
+    visitSetString(stmt: SetString): T;
     visitSetVariable(stmt: SetVariable): T;
     visitSetRefVariable(stmt: SetRefVariable): T;
     visitWhileDo(stmt: WhileDo): T;
