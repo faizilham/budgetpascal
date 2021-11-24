@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isMemoryStored, isOrdinal, isString, MemoryStored, PascalType, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isString, MemoryType, PascalType, StringType } from "./expression";
 import { ParamType, Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -142,7 +142,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   private buildVariable(entry: VariableEntry) {
-    const name = entry.name;
     if (entry.type === BaseType.Void) {
       if (entry.returnVar) return;
       throw new UnreachableErr(`Invalid variable type for ${entry.name}.`);
@@ -170,7 +169,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       }
     }
 
-    if (isMemoryStored(entry.type)) {
+    if (isMemoryType(entry.type)) {
       this.addMemoryStoredVar(entry, entry.type);
     }
   }
@@ -183,7 +182,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       ctx.locals.push(wasmType);
     }
 
-    if (variable.paramType !== ParamType.REF && isMemoryStored(variable.type)) {
+    if (variable.paramType !== ParamType.REF && isMemoryType(variable.type)) {
       return this.addMemoryStoredVar(variable, variable.type);
     }
 
@@ -217,7 +216,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     return id;
   }
 
-  private addMemoryStoredVar(variable: VariableEntry, obj: MemoryStored) {
+  private addMemoryStoredVar(variable: VariableEntry, obj: MemoryType) {
     let address = this.runtime.stackTop()
 
     if (variable.returnVar) {
@@ -278,7 +277,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const returnVar = subroutine.returnVar;
     const isFunction = returnVar.type !== BaseType.Void
 
-    if (isMemoryStored(returnVar.type)) {
+    if (isMemoryType(returnVar.type)) {
       // return var should be outside of callframe
       this.currentBlock.push(this.runtime.pushStack(returnVar.type.bytesize));
     }
@@ -752,7 +751,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       case VariableLevel.UPPER: {
         const address = this.resolveUpperVariable(entry);
 
-        if (isMemoryStored(entry.type)) return address;
+        if (isMemoryType(entry.type)) return address;
         if (wasmType === binaryen.f64) {
           return this.wasm.f64.load(0, 1, address);
         } else {
@@ -778,7 +777,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const entry = expr.entry;
     let address = this.getReferredAddress(expr);
 
-    if (isMemoryStored(entry.type)) {
+    if (isMemoryType(entry.type)) {
       return address;
     }
 

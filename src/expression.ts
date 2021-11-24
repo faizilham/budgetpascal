@@ -9,7 +9,7 @@ export enum BaseType {
   Real,
 }
 
-export class StringType implements MemoryStored {
+export class StringType implements MemoryType {
   bytesize: number;
   private constructor(public size: number){
     this.bytesize = size + 1;
@@ -29,9 +29,9 @@ export class StringType implements MemoryStored {
   }
 }
 
-export type PascalType = BaseType | StringType;
+export type PascalType = BaseType | MemoryType;
 
-export interface MemoryStored {
+export interface MemoryType {
   bytesize: number
 }
 
@@ -59,8 +59,8 @@ export function isStringLike(type?: PascalType): boolean {
   return type === BaseType.Char || isString(type);
 }
 
-export function isMemoryStored(type?: PascalType | MemoryStored): type is MemoryStored {
-  return type != null && (type as MemoryStored).bytesize != null;
+export function isMemoryType(type?: PascalType): type is MemoryType {
+  return type != null && (type as MemoryType).bytesize != null;
 }
 
 export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
@@ -73,8 +73,10 @@ export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
 
 export function getTypeName(type?: PascalType): string {
   if (type == null || type === BaseType.Void) return "untyped";
-  if (isString(type)) return type.size < 255 ? `String[${type.size}]` : "String";
-  return BaseType[type];
+  else if (isBaseType(type)) return BaseType[type];
+  else if (isString(type)) return type.size < 255 ? `String[${type.size}]` : "String";
+  // TODO: array & record
+  return `Unknown`;
 }
 
 export class Range {
