@@ -310,14 +310,14 @@ export class Parser {
   private reserveTempVariable(type: PascalType): VariableEntry {
     const entry = this.currentRoutine.identifiers.getTempVariable(type, this.currentRoutine.id);
     entry.reserved = true;
-    entry.tempUsed++;
+    entry.usedCount++;
     return entry;
   }
 
   private releaseTempVariable(entry: VariableEntry, unused = false) {
     entry.reserved = false;
     if (unused) {
-      entry.tempUsed--;
+      entry.usedCount--;
     }
   }
 
@@ -832,8 +832,12 @@ export class Parser {
     }
 
     if (left instanceof Expr.Variable) {
+      left.entry.usedCount++; //TODO: usedcount?
+
       return new Stmt.SetVariable(left, right);
     } else if (left instanceof Expr.RefVariable) {
+      left.entry.usedCount++; //TODO: usedcount?
+
       return new Stmt.SetRefVariable(left, right);
     }
 
@@ -859,8 +863,14 @@ export class Parser {
       case IdentifierType.Variable: {
 
         if (entry.ownerId !== this.currentRoutine.id) {
+          if (entry.level === VariableLevel.LOCAL && entry.usedCount > 0) {
+            // assertion: local use of a variable should be parsed after all uses by inner subroutine.
+            throw new UnreachableErr("Invalid local-upper variable change.")
+          }
           entry.level = VariableLevel.UPPER;
         }
+
+        entry.usedCount++; //TODO: usedcount?
 
         if (entry.paramVar && entry.paramType === ParamType.REF) {
           return new Expr.RefVariable(entry);

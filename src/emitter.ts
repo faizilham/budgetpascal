@@ -147,7 +147,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       throw new UnreachableErr(`Invalid variable type for ${entry.name}.`);
     }
 
-    if (entry.temporary && entry.tempUsed < 1) {
+    if (entry.temporary && entry.usedCount < 1) {
       return;
     }
 

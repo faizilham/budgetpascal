@@ -61,12 +61,12 @@ export class Subroutine extends Routine{
       initialized: false,
       level: VariableLevel.LOCAL,
       immutable: false,
+      usedCount: 1,
       returnVar: true,
       paramVar: false,
       paramType: ParamType.VALUE,
       temporary: false,
       reserved: false,
-      tempUsed: 0,
       memsize: 0,
       memoffset: 0,
     };
@@ -105,6 +105,7 @@ export interface VariableEntry {
   initialized: boolean;
   level: VariableLevel;
   immutable: boolean;
+  usedCount: number;
 
   returnVar: boolean; // only used for return var in subroutines
 
@@ -113,7 +114,6 @@ export interface VariableEntry {
 
   temporary: boolean;
   reserved: boolean; // only used for temp variables
-  tempUsed: number; // only used for temp variables
 
   // for Upper Var only
   memsize: number;
@@ -165,12 +165,12 @@ export class IdentifierTable {
       initialized: false,
       level: VariableLevel.LOCAL,
       immutable: false,
+      usedCount: 0,
       returnVar: false,
       paramVar: false,
       paramType: ParamType.VALUE,
       temporary: false,
       reserved: false,
-      tempUsed: 0,
       memsize: 0,
       memoffset: 0,
     }
@@ -214,12 +214,12 @@ export class IdentifierTable {
       initialized: false,
       level: VariableLevel.LOCAL,
       immutable: false,
+      usedCount: 0,
       returnVar: false,
       paramVar: false,
       paramType: ParamType.VALUE,
       temporary: true,
       reserved: false,
-      tempUsed: 0,
       memsize: 0,
       memoffset: 0,
     };
