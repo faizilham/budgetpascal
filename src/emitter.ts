@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isString, MemoryType, PascalType, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isPointer, isString, MemoryType, PascalType, StringType } from "./expression";
 import { ParamType, Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -151,10 +151,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       return;
     }
 
-    let wasmType = this.getBinaryenType(entry.type);
-    if (entry.paramVar && entry.paramType === ParamType.REF) {
-      wasmType = binaryen.i32;
-    }
+    const wasmType = this.getBinaryenType(entry.type);
 
     switch(entry.level) {
       case VariableLevel.UPPER: return this.addUpperVar(entry, wasmType);
@@ -182,7 +179,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       ctx.locals.push(wasmType);
     }
 
-    if (variable.paramType !== ParamType.REF && isMemoryType(variable.type)) {
+    if (isMemoryType(variable.type)) {
       return this.addMemoryStoredVar(variable, variable.type);
     }
 
@@ -207,13 +204,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     this.currentBlock.push(
       this.runtime.pushStack(size)
     );
-  }
-
-  private addNewLocalVar(wasmType: number): number {
-    const context = this.context();
-    const id = context.lastLocalIdx++;
-    context.locals.push(wasmType);
-    return id;
   }
 
   private addMemoryStoredVar(variable: VariableEntry, obj: MemoryType) {
@@ -582,11 +572,37 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     let sourceExpr = this.visitAndPreserveStack(stmt.value);
     let targetAddr = this.visitAndPreserveStack(stmt.target);
 
-    const strType = stmt.target.type as StringType;
+    const strType = stmt.target.type;
+    let size;
+
+    if (isPointer(strType)) {
+      size = (strType.source as StringType).size;
+    } else {
+      size = (strType as StringType).size;
+    }
 
     this.currentBlock.push(
-      this.runtime.copyString(targetAddr, strType.size, sourceExpr)
+      this.runtime.copyString(targetAddr, size, sourceExpr)
     );
+  }
+
+  visitSetMemory(stmt: Stmt.SetMemory): void {
+    let exprInstr = this.visitAndPreserveStack(stmt.value);
+    let address = this.visitAndPreserveStack(stmt.target);
+
+    const type = stmt.value.type;
+    let instr;
+
+    if (isMemoryType(type)) {
+      // TODO: array & record
+      throw new Error("Unimplemented");
+    } else if (type === BaseType.Real) {
+      instr = this.wasm.f64.store(0, 1, address, exprInstr);
+    } else {
+      instr = this.wasm.i32.store(0, 1, address, exprInstr);
+    }
+
+    this.currentBlock.push(instr);
   }
 
   visitSetVariable(stmt: Stmt.SetVariable) {
@@ -623,25 +639,25 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
   }
 
-  visitSetRefVariable(stmt: Stmt.SetRefVariable) {
-    let exprInstr = this.visitAndPreserveStack(stmt.value);
-    const address = this.getReferredAddress(stmt.target);
+  // visitSetRefVariable(stmt: Stmt.SetRefVariable) {
+  //   let exprInstr = this.visitAndPreserveStack(stmt.value);
+  //   const address = this.getReferredAddress(stmt.target);
 
-    const type = stmt.target.type;
+  //   const type = stmt.target.type;
 
-    let instr;
-    if (isString(type)) {
-      instr = this.runtime.copyString(address, type.size, exprInstr);
-    } else if (type === BaseType.Real) {
-      // TODO: array & records
+  //   let instr;
+  //   if (isString(type)) {
+  //     instr = this.runtime.copyString(address, type.size, exprInstr);
+  //   } else if (type === BaseType.Real) {
+  //     // TODO: array & records
 
-      instr = this.wasm.f64.store(0, 1, address, exprInstr);
-    } else {
-      instr = this.wasm.i32.store(0, 1, address, exprInstr);
-    }
+  //     instr = this.wasm.f64.store(0, 1, address, exprInstr);
+  //   } else {
+  //     instr = this.wasm.i32.store(0, 1, address, exprInstr);
+  //   }
 
-    this.currentBlock.push(instr);
-  }
+  //   this.currentBlock.push(instr);
+  // }
 
   visitWhileDo(stmt: Stmt.WhileDo)  {
     const prevLoop = this.currentLoop;
@@ -761,6 +777,20 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
   }
 
+  visitDeref(expr: Expr.Deref): number {
+    let address = expr.ptr.accept(this);
+
+    if (isMemoryType(expr.type)) {
+      return address;
+    }
+
+    if (expr.type === BaseType.Real) {
+      return this.wasm.f64.load(0, 1, address);
+    }
+
+    return this.wasm.i32.load(0, 1, address);
+  }
+
   visitRefer(expr: Expr.Refer): number {
     // TODO: array / record member;
     const entry = expr.source.entry;
@@ -772,35 +802,35 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     return address;
   }
 
-  visitRefVariable(expr: Expr.RefVariable): number {
-    // assumption: refvariable entry will be set to i32
-    const entry = expr.entry;
-    let address = this.getReferredAddress(expr);
+  // visitRefVariable(expr: Expr.RefVariable): number {
+  //   // assumption: refvariable entry will be set to i32
+  //   const entry = expr.entry;
+  //   let address = this.getReferredAddress(expr);
 
-    if (!expr.derefer || isMemoryType(entry.type)) {
-      return address;
-    }
+  //   if (!expr.derefer || isMemoryType(entry.type)) {
+  //     return address;
+  //   }
 
-    if (entry.type === BaseType.Real) {
-      return this.wasm.f64.load(0, 1, address);
-    }
+  //   if (entry.type === BaseType.Real) {
+  //     return this.wasm.f64.load(0, 1, address);
+  //   }
 
-    return this.wasm.i32.load(0, 1, address);
-  }
+  //   return this.wasm.i32.load(0, 1, address);
+  // }
 
-  private getReferredAddress(expr: Expr.RefVariable): number {
-    const entry = expr.entry;
-    let address;
+  // private getReferredAddress(expr: Expr.RefVariable): number {
+  //   const entry = expr.entry;
+  //   let address;
 
-    if (entry.level === VariableLevel.LOCAL) {
-      address = this.wasm.local.get(entry.index, binaryen.i32);
-    } else { // VariableLevel.UPPER
-      const entryAddress = this.resolveUpperVariable(entry);
-      address = this.wasm.i32.load(0, 1, entryAddress);
-    }
+  //   if (entry.level === VariableLevel.LOCAL) {
+  //     address = this.wasm.local.get(entry.index, binaryen.i32);
+  //   } else { // VariableLevel.UPPER
+  //     const entryAddress = this.resolveUpperVariable(entry);
+  //     address = this.wasm.i32.load(0, 1, entryAddress);
+  //   }
 
-    return address;
-  }
+  //   return address;
+  // }
 
   visitUnary(expr: Expr.Unary): number {
     const operand = expr.operand.accept(this);

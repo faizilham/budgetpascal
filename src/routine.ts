@@ -365,21 +365,22 @@ export namespace Stmt {
     }
   }
 
+  export class SetMemory extends Stmt {
+    constructor(public target: Expr, public value: Expr) {
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitSetMemory(this);
+    }
+  }
+
   export class SetVariable extends Stmt {
     constructor(public target: Expr.Variable, public value: Expr) {
       super();
     }
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitSetVariable(this);
-    }
-  }
-
-  export class SetRefVariable extends Stmt {
-    constructor(public target: Expr.RefVariable, public value: Expr) {
-      super();
-    }
-    public accept<T>(visitor: Visitor<T>): T {
-      return visitor.visitSetRefVariable(this);
     }
   }
 
@@ -412,8 +413,8 @@ export namespace Stmt {
     visitRead(stmt: Read): T;
     visitRepeatUntil(stmt: RepeatUntil): T;
     visitSetString(stmt: SetString): T;
+    visitSetMemory(stmt: SetMemory): T;
     visitSetVariable(stmt: SetVariable): T;
-    visitSetRefVariable(stmt: SetRefVariable): T;
     visitWhileDo(stmt: WhileDo): T;
     visitWrite(stmt: Write): T;
   }

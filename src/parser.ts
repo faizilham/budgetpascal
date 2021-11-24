@@ -1,5 +1,5 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike, isPointer, isPointerTo, isMemoryType, Pointer } from "./expression";
 import { IdentifierType, ParamType, Program, Routine, Stmt, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
@@ -296,7 +296,10 @@ export class Parser {
             paramType = ParamType.REF;
           }
 
-          const [names, type] = this.varDeclaration(true);
+          let [names, type] = this.varDeclaration(true);
+
+          if (paramType === ParamType.REF) type = new Pointer(type);
+
           params.push([names, type, paramType]);
         } while(!this.check(TokenTag.RIGHT_PAREN) && this.match(TokenTag.SEMICOLON));
       }
@@ -533,7 +536,7 @@ export class Parser {
 
     const iterator = this.variable();
 
-    if (!(iterator instanceof Expr.Variable)) {
+    if (!(iterator instanceof Expr.Variable)) { // TODO: test with ref param, also in fpc
       throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
     } else if (iterator.entry.level === VariableLevel.UPPER && iterator.entry.ownerId !== 0) {
       throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
@@ -819,29 +822,39 @@ export class Parser {
       // valid implicit typecast: integer to real, char to string
       if (isString(left.type) && right.type === BaseType.Char ) {
         right = new Expr.Typecast(right, StringType.create(1));
-      } else if (left.type !== BaseType.Real || right.type !== BaseType.Integer) {
+      } else if (left.type === BaseType.Real && right.type === BaseType.Integer) {
+        right = new Expr.Typecast(right, BaseType.Real)
+      } else {
         throw this.errorAt(operator,
           `Can't assign value of type ${getTypeName(right.type)} to ${getTypeName(left.type)}`);
       }
     }
 
+    left = this.removeDeref(left);
+
     // TODO: handle array & record member
 
-    if (isString(left.type)){
+    if (isString(left.type) || isPointerTo(left.type, isString)){
       return new Stmt.SetString(left, right);
+    } else if (isMemoryType(left.type) || isPointer(left.type)) {
+      return new Stmt.SetMemory(left, right);
     }
 
     if (left instanceof Expr.Variable) {
       left.entry.usedCount++; //TODO: usedcount?
 
       return new Stmt.SetVariable(left, right);
-    } else if (left instanceof Expr.RefVariable) {
-      left.entry.usedCount++; //TODO: usedcount?
-
-      return new Stmt.SetRefVariable(left, right);
     }
 
     throw new UnreachableErr("Unknown assignment target");
+  }
+
+  private removeDeref(expr: Expr): Expr {
+    if (expr instanceof Expr.Deref) {
+      expr = expr.ptr;
+    }
+
+    return expr;
   }
 
   /** Expression Parsing **/
@@ -872,11 +885,16 @@ export class Parser {
 
         entry.usedCount++; //TODO: usedcount?
 
-        if (entry.paramVar && entry.paramType === ParamType.REF) {
-          return new Expr.RefVariable(entry);
+        let expr: Expr = new Expr.Variable(entry);
+
+        // if (entry.paramVar && entry.paramType === ParamType.REF) {
+        // }
+
+        if (isPointer(entry.type)) {
+          expr = new Expr.Deref(expr);
         }
 
-        return new Expr.Variable(entry);
+        return expr;
       };
 
       default:
@@ -898,19 +916,30 @@ export class Parser {
     }
 
     for (let i = 0; i < params.length; i++) {
-      if (!isTypeEqual(params[i].type, args[i].type)) {
-        throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i].type)}, got ${getTypeName(args[i].type)}`);
-      } else if (params[i].paramType === ParamType.REF) {
-        const sourceExpr = args[i];
+      if (params[i].paramType === ParamType.REF) {
+        let sourceExpr = args[i];
+
+        if (!isPointerTo(params[i].type, sourceExpr.type)) {
+          const expectedType = (params[i].type as Pointer).source;
+          throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(expectedType)}, got ${getTypeName(sourceExpr.type)}`);
+        }
+
+        sourceExpr = this.removeDeref(sourceExpr);
+
         if (sourceExpr instanceof Expr.Variable) {
           // TODO: array & record member
-          sourceExpr.entry.level = VariableLevel.UPPER;
-          args[i] = new Expr.Refer(sourceExpr);
-        } else if (sourceExpr instanceof Expr.RefVariable) {
-          sourceExpr.derefer = false;
+
+          if (!isPointer(sourceExpr.entry.type)) {
+            sourceExpr.entry.level = VariableLevel.UPPER;
+            args[i] = new Expr.Refer(sourceExpr);
+          } else {
+            args[i] = sourceExpr;
+          }
         } else {
           throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
         }
+      } else if (!isTypeEqual(params[i].type, args[i].type)) { // TODO: FIXME: fix this to isAssignable instead of isTypeEqual
+        throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i].type)}, got ${getTypeName(args[i].type)}`);
       }
     }
 

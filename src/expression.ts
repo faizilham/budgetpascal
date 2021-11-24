@@ -1,5 +1,8 @@
+import { UnreachableErr } from "./errors";
 import { Subroutine, VariableEntry } from "./routine";
 import { Token } from "./scanner";
+
+export type PascalType = BaseType | MemoryType | Pointer;
 
 export enum BaseType {
   Void,
@@ -7,6 +10,10 @@ export enum BaseType {
   Char,
   Integer,
   Real,
+}
+
+export interface MemoryType {
+  bytesize: number
 }
 
 export class StringType implements MemoryType {
@@ -29,10 +36,8 @@ export class StringType implements MemoryType {
   }
 }
 
-export type PascalType = BaseType | MemoryType;
-
-export interface MemoryType {
-  bytesize: number
+export class Pointer {
+  constructor(public source: PascalType) {}
 }
 
 export function isBaseType(type?: PascalType): type is BaseType {
@@ -51,6 +56,10 @@ export function isBool(type?: PascalType): boolean {
   return type === BaseType.Boolean;
 }
 
+export function isMemoryType(type?: PascalType): type is MemoryType {
+  return type != null && (type as MemoryType).bytesize != null;
+}
+
 export function isString(type?: PascalType): type is StringType {
   return type != null && (type as StringType).size != null;
 }
@@ -59,14 +68,27 @@ export function isStringLike(type?: PascalType): boolean {
   return type === BaseType.Char || isString(type);
 }
 
-export function isMemoryType(type?: PascalType): type is MemoryType {
-  return type != null && (type as MemoryType).bytesize != null;
+export function isPointer(type?: PascalType): type is Pointer {
+  return type != null && (type as Pointer).source != null;
+}
+
+type TypeCheckFunc = (type?: PascalType) => boolean;
+
+export function isPointerTo(ptrType?: PascalType, testType?: PascalType | TypeCheckFunc): boolean {
+  if (!isPointer(ptrType)) return false;
+
+  if (testType instanceof Function) {
+    return testType(ptrType.source);
+  }
+
+  return isTypeEqual(ptrType.source, testType);
 }
 
 export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
   if (a == null || b == null) return false;
   if (a === b) return true;
   if (isString(a) && isString(b)) return true;
+  if (isPointer(a) && isPointer(b)) return isTypeEqual(a.source, b.source);
 
   return false;
 }
@@ -219,16 +241,19 @@ export namespace Expr {
     }
   }
 
-  export class RefVariable extends Expr {
-    constructor(public entry: VariableEntry, public derefer = true) {
+  export class Deref extends Expr {
+    constructor(public ptr: Expr) {
       super();
-      this.type = entry.type;
-      this.assignable = !entry.immutable;
-      this.stackNeutral = true;
+      this.stackNeutral = ptr.stackNeutral;
+      if (!isPointer(ptr.type)) {
+        throw new UnreachableErr("Trying to use Deref for non-pointer");
+      }
+      this.assignable = ptr.assignable;
+      this.type = ptr.type.source;
     }
 
     public accept<T>(visitor: Visitor<T>): T {
-      return visitor.visitRefVariable(this);
+      return visitor.visitDeref(this);
     }
   }
 
@@ -239,8 +264,8 @@ export namespace Expr {
     visitLiteral(expr: Literal): T;
     visitShortCircuit(expr: ShortCircuit): T;
     visitVariable(expr: Variable): T;
+    visitDeref(expr: Deref): T;
     visitRefer(expr: Refer): T;
-    visitRefVariable(expr: RefVariable): T;
     visitStringConcat(expr: StringConcat): T;
     visitStringCompare(expr: StringCompare): T;
     visitTypecast(expr: Typecast): T;
