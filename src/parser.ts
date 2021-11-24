@@ -907,8 +907,7 @@ export class Parser {
           sourceExpr.entry.level = VariableLevel.UPPER;
           args[i] = new Expr.Refer(sourceExpr);
         } else if (sourceExpr instanceof Expr.RefVariable) {
-          // do nothing
-          // TODO: test with non string.
+          sourceExpr.derefer = false;
         } else {
           throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
         }

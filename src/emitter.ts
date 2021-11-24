@@ -777,7 +777,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const entry = expr.entry;
     let address = this.getReferredAddress(expr);
 
-    if (isMemoryType(entry.type)) {
+    if (!expr.derefer || isMemoryType(entry.type)) {
       return address;
     }
 

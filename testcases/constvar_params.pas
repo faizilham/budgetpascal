@@ -61,8 +61,14 @@ program constvar_params;
     a := 12;
     writeln(x = a);
     inner(n);
+    writeln('n ', n);
+
     n := 12;
     inner(m);
+    writeln('m ', m);
+
+    inner(a);
+    writeln('a ', a);
   end;
 
   procedure var_str(var s, s1: string);
@@ -99,6 +105,7 @@ begin
   writeln(x, ' ', y);
 
   var_global(x);
+  writeln('x ', x);
 
 
   str1 := 'hello';

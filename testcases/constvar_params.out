@@ -8,7 +8,12 @@ test
 20 188
 TRUE
 TRUE
+n 10
 FALSE
+m 10
+FALSE
+a 10
+x 10
 hello world
 hello world
 test world

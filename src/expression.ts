@@ -220,7 +220,7 @@ export namespace Expr {
   }
 
   export class RefVariable extends Expr {
-    constructor(public entry: VariableEntry) {
+    constructor(public entry: VariableEntry, public derefer = true) {
       super();
       this.type = entry.type;
       this.assignable = !entry.immutable;
