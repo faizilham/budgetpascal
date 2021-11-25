@@ -1,5 +1,5 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike, isPointer, isPointerTo, isMemoryType, Pointer } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike, isPointer, isPointerTo, isMemoryType, Pointer, ArrayType } from "./expression";
 import { IdentifierType, ParamType, Program, Routine, Stmt, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
@@ -159,25 +159,14 @@ export class Parser {
   }
 
   private typeName(identiferOnly = false): PascalType {
-    this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE], "Expect type name.");
+    this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE, TokenTag.ARRAY], "Expect type name.");
     const typeName = this.previous;
 
     let type: PascalType | null = null;
     if (!identiferOnly) {
-      if (typeName.tag === TokenTag.STRING_TYPE) {
-        let length = 255;
-
-        if (this.match(TokenTag.LEFT_SQUARE)) {
-          this.consume(TokenTag.INTEGER, "Expect string length");
-          length = this.previous.literal as number;
-          this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
-
-          if (length > 255) {
-            throw this.errorAt(typeName, "String size can't be larger than 255.");
-          }
-        }
-
-        type = StringType.create(length);
+      switch(typeName.tag) {
+        case TokenTag.STRING_TYPE: type = this.stringType(); break;
+        case TokenTag.ARRAY: type = this.arrayType(); break;
       }
     }
 
@@ -186,6 +175,57 @@ export class Parser {
       if (type == null) {
         throw this.errorAt(typeName, `Unknown type '${typeName.lexeme}'.`);
       }
+    }
+
+    return type;
+  }
+
+  private stringType(): StringType {
+    let length = 255;
+
+    if (this.match(TokenTag.LEFT_SQUARE)) {
+      this.consume(TokenTag.INTEGER, "Expect string length");
+      let intLiteral = this.previous;
+      length = intLiteral.literal as number;
+      this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
+
+      if (length > 255) {
+        throw this.errorAt(intLiteral, "String size can't be larger than 255.");
+      }
+    }
+
+    return StringType.create(length);
+  }
+
+  private arrayType(): PascalType {
+    this.consume(TokenTag.LEFT_SQUARE, "Expect '['.");
+
+    const dimensions: [number, number][] = [];
+
+    do {
+      const startToken = this.consume(TokenTag.INTEGER, "Expect integer starting index.");
+      this.consume(TokenTag.RANGE, "Expect '..' after starting index.");
+      const endToken = this.consume(TokenTag.INTEGER, "Expect integer final index.");
+
+      const start = startToken.literal as number;
+      const end = endToken.literal as number;
+
+      if (start >= end) {
+        throw this.errorAt(startToken, "Starting index must be smaller than final index.");
+      }
+
+      dimensions.push([start, end]);
+    } while(!this.check(TokenTag.RIGHT_SQUARE) && this.match(TokenTag.COMMA));
+
+    this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
+
+    this.consume(TokenTag.OF, "Expect 'of'.");
+
+    let type = this.typeName();
+
+    for (let i = dimensions.length - 1; i >= 0; i--) {
+      const [start, end] = dimensions[i];
+      type = new ArrayType(start, end, type);
     }
 
     return type;
@@ -536,7 +576,7 @@ export class Parser {
 
     const iterator = this.variable();
 
-    if (!(iterator instanceof Expr.Variable)) { // TODO: test with ref param, also in fpc
+    if (!(iterator instanceof Expr.Variable)) {
       throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
     } else if (iterator.entry.level === VariableLevel.UPPER && iterator.entry.ownerId !== 0) {
       throw this.errorAtPrevious(`Expect local or global variable in a for loop.`);
@@ -832,8 +872,6 @@ export class Parser {
 
     left = this.removeDeref(left);
 
-    // TODO: handle array & record member
-
     if (isString(left.type) || isPointerTo(left.type, isString)){
       return new Stmt.SetString(left, right);
     } else if (isMemoryType(left.type) || isPointer(left.type)) {
@@ -926,15 +964,11 @@ export class Parser {
 
         sourceExpr = this.removeDeref(sourceExpr);
 
-        if (sourceExpr instanceof Expr.Variable) {
-          // TODO: array & record member
-
-          if (!isPointer(sourceExpr.entry.type)) {
-            sourceExpr.entry.level = VariableLevel.UPPER;
-            args[i] = new Expr.Refer(sourceExpr);
-          } else {
-            args[i] = sourceExpr;
-          }
+        if (isPointer(sourceExpr.type)) {
+          args[i] = sourceExpr;
+        } else if (sourceExpr instanceof Expr.Variable) {
+          sourceExpr.entry.level = VariableLevel.UPPER;
+          args[i] = new Expr.Refer(sourceExpr);
         } else {
           throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
         }
@@ -982,6 +1016,37 @@ export class Parser {
     }
 
     return new Expr.Typecast(expr, targetType);
+  }
+
+  private indexer(left: Expr): Expr {
+    let indexes: Expr[] = [];
+    let indexTokens: Token[] = [];
+
+    do {
+      const token = this.previous;
+      const expr = this.expression();
+
+      if (expr.type !== BaseType.Integer) {
+        throw this.errorAt(token, `Expect Integer type for operator[], got ${getTypeName(expr.type)}`);
+      }
+
+      indexTokens.push(token);
+      indexes.push(expr);
+    } while (!this.check(TokenTag.RIGHT_SQUARE) && this.match(TokenTag.COMMA));
+
+    this.consume(TokenTag.RIGHT_SQUARE, "Expect ']' after expression.");
+
+    let indexerExpr = left;
+    for (let i = 0; i < indexes.length; i++) {
+      const index = indexes[i];
+      if (!(indexerExpr.type instanceof ArrayType)) {
+        throw this.errorAt(indexTokens[i], `Invalid operator[] for type ${getTypeName(indexerExpr.type)}`);
+      }
+
+      indexerExpr = new Expr.Deref(new Expr.Indexer(indexerExpr, index));
+    }
+
+    return indexerExpr;
   }
 
   private parsePrecedence(precedence: Precedence): Expr {
@@ -1303,16 +1368,18 @@ export class Parser {
     return true;
   }
 
-  private consume(tag: TokenTag, errMessage: string) {
+  private consume(tag: TokenTag, errMessage: string): Token {
     if (!this.match(tag)){
       throw this.errorAtCurrent(errMessage);
     }
+
+    return this.previous;
   }
 
-  private consumeAny(tags: TokenTag[], errMessage: string) {
+  private consumeAny(tags: TokenTag[], errMessage: string): Token {
     for (let tag of tags) {
       if (this.match(tag)) {
-        return;
+        return this.previous;
       }
     }
 
@@ -1356,7 +1423,8 @@ export class Parser {
       [TokenTag.FALSE]:      entry(parser.literals, null, Precedence.None),
       [TokenTag.IDENTIFIER]: entry(parser.variable, null, Precedence.None),
 
-      [TokenTag.LEFT_PAREN]: entry(parser.grouping, null, Precedence.Call),
+      [TokenTag.LEFT_PAREN]:  entry(parser.grouping, null, Precedence.Call),
+      [TokenTag.LEFT_SQUARE]: entry(null, parser.indexer, Precedence.Call),
       // TokenType.DOT
 
       [TokenTag.PLUS]:       entry(parser.unary, parser.binary, Precedence.Sums),

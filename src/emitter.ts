@@ -594,8 +594,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     let instr;
 
     if (isMemoryType(type)) {
-      // TODO: array & record
-      throw new Error("Unimplemented");
+      instr = this.wasm.memory.copy(address, exprInstr, this.wasm.i32.const(type.bytesize));
     } else if (type === BaseType.Real) {
       instr = this.wasm.f64.store(0, 1, address, exprInstr);
     } else {
@@ -638,26 +637,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       }
     }
   }
-
-  // visitSetRefVariable(stmt: Stmt.SetRefVariable) {
-  //   let exprInstr = this.visitAndPreserveStack(stmt.value);
-  //   const address = this.getReferredAddress(stmt.target);
-
-  //   const type = stmt.target.type;
-
-  //   let instr;
-  //   if (isString(type)) {
-  //     instr = this.runtime.copyString(address, type.size, exprInstr);
-  //   } else if (type === BaseType.Real) {
-  //     // TODO: array & records
-
-  //     instr = this.wasm.f64.store(0, 1, address, exprInstr);
-  //   } else {
-  //     instr = this.wasm.i32.store(0, 1, address, exprInstr);
-  //   }
-
-  //   this.currentBlock.push(instr);
-  // }
 
   visitWhileDo(stmt: Stmt.WhileDo)  {
     const prevLoop = this.currentLoop;
@@ -792,7 +771,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   visitRefer(expr: Expr.Refer): number {
-    // TODO: array / record member;
     const entry = expr.source.entry;
     if (entry.level !== VariableLevel.UPPER) {
       throw new UnreachableErr("Trying to refer non-upper variable");
@@ -802,35 +780,19 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     return address;
   }
 
-  // visitRefVariable(expr: Expr.RefVariable): number {
-  //   // assumption: refvariable entry will be set to i32
-  //   const entry = expr.entry;
-  //   let address = this.getReferredAddress(expr);
+  visitIndexer(expr: Expr.Indexer): number {
+    const address = expr.operand.accept(this);
+    let index = expr.index.accept(this);
 
-  //   if (!expr.derefer || isMemoryType(entry.type)) {
-  //     return address;
-  //   }
+    if (expr.startIndex !== 0) {
+      const indexStart = this.wasm.i32.const(expr.startIndex);
+      index = this.wasm.i32.sub(index, indexStart);
+    }
 
-  //   if (entry.type === BaseType.Real) {
-  //     return this.wasm.f64.load(0, 1, address);
-  //   }
+    const elementSize = this.wasm.i32.const(expr.elementSize);
 
-  //   return this.wasm.i32.load(0, 1, address);
-  // }
-
-  // private getReferredAddress(expr: Expr.RefVariable): number {
-  //   const entry = expr.entry;
-  //   let address;
-
-  //   if (entry.level === VariableLevel.LOCAL) {
-  //     address = this.wasm.local.get(entry.index, binaryen.i32);
-  //   } else { // VariableLevel.UPPER
-  //     const entryAddress = this.resolveUpperVariable(entry);
-  //     address = this.wasm.i32.load(0, 1, entryAddress);
-  //   }
-
-  //   return address;
-  // }
+    return this.wasm.i32.add(address, this.wasm.i32.mul(index, elementSize));
+  }
 
   visitUnary(expr: Expr.Unary): number {
     const operand = expr.operand.accept(this);

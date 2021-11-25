@@ -14,6 +14,7 @@ export enum BaseType {
 
 export interface MemoryType {
   bytesize: number
+  typename(): string;
 }
 
 export class StringType implements MemoryType {
@@ -33,6 +34,37 @@ export class StringType implements MemoryType {
     }
 
     return strtype;
+  }
+
+  typename(): string {
+    return this.size < 255 ? `String[${this.size}]` : "String";
+  }
+}
+
+export class ArrayType implements MemoryType {
+  bytesize: number;
+  length: number;
+  constructor(public start: number, public end: number, public elementType: PascalType) {
+    this.length = end - start + 1;
+    const elementSize = sizeOf(elementType);
+    this.bytesize = this.length * elementSize;
+  }
+
+  equalTo(arr: ArrayType) {
+    return this.start === arr.start && this.end === arr.end && isTypeEqual(this.elementType, arr.elementType);
+  }
+
+  typename(): string {
+    let type: PascalType = this;
+    const dimensions = [];
+
+    do {
+      const arrtype = type as ArrayType;
+      dimensions.push(`${arrtype.start}..${arrtype.end}`);
+      type = arrtype.elementType;
+    } while(type instanceof ArrayType);
+
+    return `Array[${dimensions.join(", ")}] of ${getTypeName(type)}`;
   }
 }
 
@@ -68,6 +100,14 @@ export function isStringLike(type?: PascalType): boolean {
   return type === BaseType.Char || isString(type);
 }
 
+export function isArrayType(type?: PascalType): type is ArrayType {
+  return type != null && (type as ArrayType).elementType != null;
+}
+
+export function isArrayOf(arrType?: PascalType, elementType?: PascalType): boolean {
+  return isArrayType(arrType) && isTypeEqual(arrType.elementType, elementType);
+}
+
 export function isPointer(type?: PascalType): type is Pointer {
   return type != null && (type as Pointer).source != null;
 }
@@ -89,6 +129,7 @@ export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
   if (a === b) return true;
   if (isString(a) && isString(b)) return true;
   if (isPointer(a) && isPointer(b)) return isTypeEqual(a.source, b.source);
+  if (isArrayType(a) && isArrayType(b)) return a.equalTo(b);
 
   return false;
 }
@@ -96,13 +137,14 @@ export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
 export function getTypeName(type?: PascalType): string {
   if (type == null || type === BaseType.Void) return "untyped";
   else if (isBaseType(type)) return BaseType[type];
-  else if (isString(type)) return type.size < 255 ? `String[${type.size}]` : "String";
-  // TODO: array & record
+  else if (isMemoryType(type)) return type.typename();
   return `Unknown`;
 }
 
-export class Range {
-  constructor(public type: BaseType, public start: number, public end: number){}
+export function sizeOf(type: PascalType): number {
+  if (isMemoryType(type)) return type.bytesize;
+  if (type === BaseType.Real) return 8;
+  return 4;
 }
 
 export abstract class Expr {
@@ -154,6 +196,28 @@ export namespace Expr {
 
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitBinary(this);
+    }
+  }
+
+  export class Indexer extends Expr {
+    startIndex: number
+    elementSize: number;
+    constructor(public operand: Expr, public index: Expr) {
+      super();
+      this.stackNeutral = operand.stackNeutral && index.stackNeutral;
+      this.assignable = true;
+
+      // TODO: handle string type
+      const operandType = operand.type as ArrayType;
+      this.startIndex = operandType.start;
+
+      const elementType = operandType.elementType;
+      this.elementSize = sizeOf(elementType);
+
+      this.type = new Pointer(operandType.elementType);
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitIndexer(this);
     }
   }
 
@@ -261,6 +325,7 @@ export namespace Expr {
     visitCall(expr: Call): T;
     visitUnary(expr: Unary): T;
     visitBinary(expr: Binary): T;
+    visitIndexer(expr: Indexer): T;
     visitLiteral(expr: Literal): T;
     visitShortCircuit(expr: ShortCircuit): T;
     visitVariable(expr: Variable): T;
