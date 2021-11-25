@@ -789,6 +789,13 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     return address;
   }
 
+  visitField(expr: Expr.Field): number {
+    const address = expr.operand.accept(this);
+    const offset = this.wasm.i32.const(expr.fieldOffset);
+
+    return this.wasm.i32.add(address, offset);
+  }
+
   visitIndexer(expr: Expr.Indexer): number {
     const address = expr.operand.accept(this);
     let index = expr.index.accept(this);

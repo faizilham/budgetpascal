@@ -68,6 +68,34 @@ export class ArrayType implements MemoryType {
   }
 }
 
+export class RecordType implements MemoryType {
+  bytesize: number;
+  name: string;
+  fields: {[key: string]: {type: PascalType, offset: number}};
+
+  constructor() {
+    this.bytesize = 0;
+    this.name = "";
+    this.fields = {};
+  }
+
+  addField(name: string, type: PascalType): boolean {
+    if (this.fields[name] != null) return false;
+
+    const size = sizeOf(type);
+    const offset = this.bytesize;
+    this.bytesize += size;
+
+    this.fields[name] = {type, offset};
+
+    return true;
+  }
+
+  typename(): string {
+    return this.name.length === 0 ? '""' : this.name;
+  }
+}
+
 export class Pointer {
   constructor(public source: PascalType) {}
 }
@@ -108,6 +136,10 @@ export function isArrayOf(arrType?: PascalType, elementType?: PascalType): boole
   return isArrayType(arrType) && isTypeEqual(arrType.elementType, elementType);
 }
 
+export function isRecord(type?: PascalType): type is RecordType {
+  return type != null && (type as RecordType).fields != null;
+}
+
 export function isPointer(type?: PascalType): type is Pointer {
   return type != null && (type as Pointer).source != null;
 }
@@ -130,6 +162,7 @@ export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
   if (isString(a) && isString(b)) return true;
   if (isPointer(a) && isPointer(b)) return isTypeEqual(a.source, b.source);
   if (isArrayType(a) && isArrayType(b)) return a.equalTo(b);
+  // record types are unique, so it needs to equal like a === b
 
   return false;
 }
@@ -197,6 +230,19 @@ export namespace Expr {
 
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitBinary(this);
+    }
+  }
+
+  export class Field extends Expr {
+    constructor(public operand: Expr, public fieldOffset: number, public fieldType: PascalType) {
+      super();
+      this.assignable = operand.assignable;
+      this.stackNeutral = operand.stackNeutral;
+      this.type = new Pointer(fieldType);
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitField(this);
     }
   }
 
@@ -335,6 +381,7 @@ export namespace Expr {
     visitCall(expr: Call): T;
     visitUnary(expr: Unary): T;
     visitBinary(expr: Binary): T;
+    visitField(expr: Field): T;
     visitIndexer(expr: Indexer): T;
     visitLiteral(expr: Literal): T;
     visitShortCircuit(expr: ShortCircuit): T;

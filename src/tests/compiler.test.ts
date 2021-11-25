@@ -41,7 +41,7 @@ const runTest = async (testname: string) => {
 
 describe("Compiler test", () => {
   const tests = ["basic_expression", "branching", "strings", "subroutine", "scoping",
-                  "constvar_params", "typedef", "arrays"];
+                  "constvar_params", "typedef", "arrays", "records"];
 
   for (const test of tests) {
     it(`Generate correct output for '${test}' program`, async () => runTest(test));

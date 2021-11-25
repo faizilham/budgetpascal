@@ -1,5 +1,5 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike, isPointer, isPointerTo, isMemoryType, Pointer, ArrayType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike, isPointer, isPointerTo, isMemoryType, Pointer, ArrayType, RecordType, isRecord } from "./expression";
 import { IdentifierType, ParamType, Program, Routine, Stmt, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
@@ -159,7 +159,8 @@ export class Parser {
   }
 
   private typeName(identiferOnly = false): PascalType {
-    this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE, TokenTag.ARRAY], "Expect type name.");
+    this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE, TokenTag.ARRAY, TokenTag.RECORD],
+      "Expect type name.");
     const typeName = this.previous;
 
     let type: PascalType | null = null;
@@ -167,6 +168,7 @@ export class Parser {
       switch(typeName.tag) {
         case TokenTag.STRING_TYPE: type = this.stringType(); break;
         case TokenTag.ARRAY: type = this.arrayType(); break;
+        case TokenTag.RECORD: type = this.recordType(); break;
       }
     }
 
@@ -231,6 +233,26 @@ export class Parser {
     return type;
   }
 
+  private recordType(): RecordType {
+    let record = new RecordType();
+    do {
+      const [names, type] = this.varDeclaration();
+
+      for (let name of names) {
+        if (!record.addField(name.lexeme, type)) {
+          throw this.errorAt(name, `Field ${name.lexeme} already exists for this record.`);
+        }
+      }
+
+      this.consume(TokenTag.SEMICOLON, "Expect ';' after field declaration.");
+
+    } while (!this.check(TokenTag.END) && !this.check(TokenTag.EOF));
+
+    this.consume(TokenTag.END, "Expect 'end' after record fields.");
+
+    return record;
+  }
+
   private synchronizeVarConst() {
     while(this.current.tag !== TokenTag.EOF) {
       if (this.previous.tag === TokenTag.SEMICOLON) return;
@@ -277,6 +299,10 @@ export class Parser {
     const result = this.currentRoutine.identifiers.addType(name.lexeme, type);
     if (!result) {
       throw this.errorAt(name, `Identifier '${name.lexeme}' is already declared in this scope.`);
+    }
+
+    if (type instanceof RecordType) {
+      type.name = name.lexeme;
     }
   }
 
@@ -1057,6 +1083,24 @@ export class Parser {
     return indexerExpr;
   }
 
+  private field(left: Expr): Expr {
+    const start = this.previous;
+    const fieldName = this.consume(TokenTag.IDENTIFIER, "Expect identifier.");
+
+    const recordType = left.type;
+
+    if (!isRecord(recordType)) {
+      throw this.errorAt(start, `Unknown operator '.' for type ${getTypeName(recordType)}`);
+    }
+
+    const fieldData = recordType.fields[fieldName.lexeme];
+    if (!fieldData) {
+      throw this.errorAt(fieldName, `Unknown field ${fieldName.lexeme} for type ${getTypeName(recordType)}`);
+    }
+
+    return new Expr.Deref(new Expr.Field(left, fieldData.offset, fieldData.type));
+  }
+
   private parsePrecedence(precedence: Precedence): Expr {
     this.advance();
 
@@ -1433,7 +1477,7 @@ export class Parser {
 
       [TokenTag.LEFT_PAREN]:  entry(parser.grouping, null, Precedence.Call),
       [TokenTag.LEFT_SQUARE]: entry(null, parser.indexer, Precedence.Call),
-      // TokenType.DOT
+      [TokenTag.DOT]:         entry(null, parser.field, Precedence.Call),
 
       [TokenTag.PLUS]:       entry(parser.unary, parser.binary, Precedence.Sums),
       [TokenTag.MINUS]:      entry(parser.unary, parser.binary, Precedence.Sums),
