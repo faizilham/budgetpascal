@@ -24,6 +24,15 @@ var
     for i := 1 to 6 do arr[i] := i;
   end;
 
+  function createArray(arr: int6): int6;
+  var i: integer;
+  begin
+    for i := 1 to 6 do begin
+      createArray[i] := arr[i] + i;
+      arr[i] := -1;
+    end;
+  end;
+
   procedure printMatrix(const mat: matrix26);
   var i, j: integer;
   begin
@@ -77,6 +86,11 @@ begin
 
   upperArr(arr);
   printArray(arr);
+
+  fillArray(arr2);
+  arr := createArray(arr2);
+  printArray(arr);
+  printArray(arr2);
 
   str := 'hello';
   writeln(str[2]);

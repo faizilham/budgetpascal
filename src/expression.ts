@@ -206,7 +206,7 @@ export namespace Expr {
     constructor(public operand: Expr, public index: Expr) {
       super();
       this.stackNeutral = operand.stackNeutral && index.stackNeutral;
-      this.assignable = true;
+      this.assignable = operand.assignable;
 
       const operandType = operand.type;
 

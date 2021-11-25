@@ -228,7 +228,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         );
       } else {
         this.currentBlock.push(
-          this.wasm.memory.copy(this.runtime.stackTop(), paramValue, obj.bytesize)
+          this.wasm.memory.copy(this.runtime.stackTop(), paramValue, this.wasm.i32.const(obj.bytesize))
         );
       }
     }
