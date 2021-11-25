@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isPointer, isString, MemoryType, PascalType, sizeOf, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isPointer, isPointerTo, isString, MemoryType, PascalType, Pointer, sizeOf, StringType } from "./expression";
 import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -515,29 +515,24 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   visitRead(stmt: Stmt.Read): void {
-    // TODO: handle array & record member
-    // TODO: handle refvariable
     for (let target of stmt.targets) {
-      const entry = target.entry;
 
       let call;
-      switch(entry.type) {
-        case BaseType.Real:
-          call = this.setVariable(entry, this.runtime.readReal());
-        break;
-        case BaseType.Integer:
-          call = this.setVariable(entry, this.runtime.readInt());
-        break;
-        case BaseType.Char:
-          call = this.setVariable(entry, this.runtime.readChar());
-        break;
-        default: // assumed String type
-        {
-          const type = entry.type as StringType;
-          const addr = this.visitVariable(target);
-          call = this.runtime.readStr(addr, type.size);
-          break;
-        }
+      if (isString(target.type)) {
+        call = this.readString(target, target.type);
+      } else if (isPointerTo(target.type, isString)) {
+        const type = (target.type as Pointer).source as StringType;
+        call = this.readString(target, type);
+      } else if (isPointer(target.type)) {
+        const address = target.accept(this);
+        const sourceType = target.type.source as BaseType
+        call = this.setMemory(address, this.readBaseType(sourceType), sourceType);
+      } else if (target instanceof Expr.Variable) {
+        const entry = target.entry;
+
+        call = this.setVariable(entry, this.readBaseType(entry.type as BaseType));
+      } else {
+        throw new UnreachableErr(`Invalid read`);
       }
 
       this.currentBlock.push(call);
@@ -546,6 +541,21 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     if (stmt.newline) {
       this.currentBlock.push(this.runtime.readLn());
     }
+  }
+
+  private readBaseType(type: BaseType): number {
+    switch(type) {
+      case BaseType.Real: return this.runtime.readReal();
+      case BaseType.Integer: return this.runtime.readInt();
+      case BaseType.Char: return this.runtime.readChar();
+      default:
+        throw new UnreachableErr(`Invalid read for type ${getTypeName(type)}`);
+    }
+  }
+
+  private readString(target: Expr, type: StringType): number {
+    const addr = target.accept(this);
+    return this.runtime.readStr(addr, type.size);
   }
 
   visitRepeatUntil(stmt: Stmt.RepeatUntil) {
@@ -594,21 +604,24 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   visitSetMemory(stmt: Stmt.SetMemory): void {
-    let exprInstr = this.visitAndPreserveStack(stmt.value);
-    let address = this.visitAndPreserveStack(stmt.target);
+    const source = this.visitAndPreserveStack(stmt.value);
+    const address = this.visitAndPreserveStack(stmt.target);
 
-    const type = stmt.value.type as PascalType;
-    let instr;
+    const sourceType = stmt.value.type as PascalType;
 
-    if (isMemoryType(type)) {
-      instr = this.wasm.memory.copy(address, exprInstr, this.wasm.i32.const(type.bytesize));
-    } else {
-      const wasmType = this.getBinaryenType(type);
-      const size = sizeOf(type)
-      instr = this.storeValue(address, exprInstr, wasmType, size);
+    this.currentBlock.push(
+      this.setMemory(address, source, sourceType)
+    );
+  }
+
+  private setMemory(address: number, sourceExpr: number, sourceType: PascalType): number {
+    if (isMemoryType(sourceType)) {
+      return this.wasm.memory.copy(address, sourceExpr, this.wasm.i32.const(sourceType.bytesize));
     }
 
-    this.currentBlock.push(instr);
+    const wasmType = this.getBinaryenType(sourceType);
+    const size = sizeOf(sourceType)
+    return this.storeValue(address, sourceExpr, wasmType, size);
   }
 
   visitSetVariable(stmt: Stmt.SetVariable) {
@@ -616,16 +629,12 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     let exprInstr = this.visitAndPreserveStack(stmt.value);
     // safe to do, since restoring stack top doesn't remove the value from memory
 
-    const instr = this.assignVariable(entry, exprInstr);
-    this.currentBlock.push(instr);
-  }
-
-  private assignVariable(entry: VariableEntry, exprInstr: number): number {
     if (entry.type === BaseType.Real && binaryen.getExpressionType(exprInstr) === binaryen.i32) {
       exprInstr = this.wasm.f64.convert_s.i32(exprInstr);
     }
 
-    return this.setVariable(entry, exprInstr);
+    const instr = this.setVariable(entry, exprInstr);
+    this.currentBlock.push(instr);
   }
 
   private setVariable(entry: VariableEntry, exprInstr: number): number {

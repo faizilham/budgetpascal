@@ -20,4 +20,4 @@ Error on line 35 col 5: Unknown operator '+=' for type Boolean and Integer
 Error on line 36 col 5: Unknown operator '-=' for type Real and Char
 Error on line 37 col 5: Unknown operator '*=' for type Char and Integer
 Error on line 38 col 5: Can't assign value of type Real to Integer
-Error on line 40 col 8: Expect assignable variable or array member.
+Error on line 40 col 8: Expect assignable variable, array element or record field.

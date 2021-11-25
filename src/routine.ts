@@ -337,7 +337,7 @@ export namespace Stmt {
   }
 
   export class Read extends Stmt {
-    constructor(public targets: Expr.Variable[], public newline: boolean) {
+    constructor(public targets: Expr[], public newline: boolean) {
       super();
     }
 

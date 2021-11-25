@@ -728,21 +728,23 @@ export class Parser {
   private readStmt(): Stmt {
     this.advance();
     const newline = this.previous.tag === TokenTag.READLN;
-    const targets: Expr.Variable[] = [];
+    const targets: Expr[] = [];
 
     if (this.match(TokenTag.LEFT_PAREN)){
       if (!this.check(TokenTag.RIGHT_PAREN)) {
         do {
           const exprStart = this.current;
-          const expr = this.expression();
+          let expr = this.expression();
+          const readType = expr.type;
+          expr = this.removeDeref(expr);
 
           // TODO: handle array & record member
-          if (!(expr instanceof Expr.Variable)) {
-            throw this.errorAt(exprStart, "Expect variable");
+          if (!expr.assignable || (!isPointer(expr.type) && !(expr instanceof Expr.Variable))) {
+            throw this.errorAt(exprStart, "Expect assignable variable, array element or record field.");
           }
 
-          if (!this.isReadable(expr.type)) {
-            throw this.errorAt(exprStart, `Can't read type ${getTypeName(expr.type)} from console`);
+          if (!this.isReadable(readType)) {
+            throw this.errorAt(exprStart, `Can't read type ${getTypeName(readType)} from console`);
           }
 
           targets.push(expr);
@@ -876,7 +878,7 @@ export class Parser {
 
   private assignment(left: Expr, modifier?: Token): Stmt {
     if (!left.assignable) {
-      throw this.errorAtCurrent("Expect assignable variable or array member.");
+      throw this.errorAtCurrent("Expect assignable variable, array element or record field.");
     }
 
     const operator = this.advance();
@@ -994,7 +996,7 @@ export class Parser {
           const expectedType = (params[i].type as Pointer).source;
           throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(expectedType)}, got ${getTypeName(sourceExpr.type)}`);
         } else if (!sourceExpr.assignable) {
-          throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
+          throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable, array element or record field.`);
         }
 
         sourceExpr = this.removeDeref(sourceExpr);
@@ -1005,7 +1007,7 @@ export class Parser {
           sourceExpr.entry.level = VariableLevel.UPPER;
           args[i] = new Expr.Refer(sourceExpr);
         } else {
-          throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
+          throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable, array element or record field.`);
         }
       } else if (params[i].paramType === ParamType.CONST && isPointer(params[i].type)) {
         const expectedType = (params[i].type as Pointer).source;
