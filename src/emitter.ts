@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isPointer, isString, MemoryType, PascalType, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isPointer, isString, MemoryType, PascalType, sizeOf, StringType } from "./expression";
 import { ParamType, Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -183,20 +183,15 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       return this.addMemoryStoredVar(variable, variable.type);
     }
 
-    const size = wasmType === binaryen.f64 ? 8 : 4;
+    const size = sizeOf(variable.type);
     const value = this.wasm.local.get(variable.index, wasmType);
 
     if (variable.paramVar) {
       // store argument to memory
       const address = this.runtime.stackTop();
-
-      let init;
-      if (wasmType === binaryen.f64) {
-        init = this.wasm.f64.store(0, 1, address, value);
-      } else {
-        init = this.wasm.i32.store(0, 1, address, value);
-      }
-      this.currentBlock.push(init);
+      this.currentBlock.push(
+        this.storeValue(address, value, wasmType, size)
+      );
     }
 
     this.updateOffset(variable, size);
@@ -343,6 +338,26 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     if (variable.memoffset === 0) return base;
 
     return this.wasm.i32.add(base, this.wasm.i32.const(variable.memoffset));
+  }
+
+  private storeValue(address: number, value: number, wasmType: number, size: number): number {
+    if (wasmType === binaryen.f64) {
+      return this.wasm.f64.store(0, 1, address, value);
+    } else if (size === 1) {
+      return this.wasm.i32.store8(0, 1, address, value);
+    } else {
+      return this.wasm.i32.store(0, 1, address, value);
+    }
+  }
+
+  private loadValue(address: number, wasmType: number, size: number): number {
+    if (wasmType === binaryen.f64) {
+      return this.wasm.f64.load(0, 1, address);
+    } else if (size === 1) {
+      return this.wasm.i32.load8_u(0, 1, address);
+    } else {
+      return this.wasm.i32.load(0, 1, address);
+    }
   }
 
   /* Statements */
@@ -590,15 +605,15 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     let exprInstr = this.visitAndPreserveStack(stmt.value);
     let address = this.visitAndPreserveStack(stmt.target);
 
-    const type = stmt.value.type;
+    const type = stmt.value.type as PascalType;
     let instr;
 
     if (isMemoryType(type)) {
       instr = this.wasm.memory.copy(address, exprInstr, this.wasm.i32.const(type.bytesize));
-    } else if (type === BaseType.Real) {
-      instr = this.wasm.f64.store(0, 1, address, exprInstr);
     } else {
-      instr = this.wasm.i32.store(0, 1, address, exprInstr);
+      const wasmType = this.getBinaryenType(type);
+      const size = sizeOf(type)
+      instr = this.storeValue(address, exprInstr, wasmType, size);
     }
 
     this.currentBlock.push(instr);
@@ -629,11 +644,9 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       case VariableLevel.UPPER: {
         const address = this.resolveUpperVariable(entry);
 
-        if (entry.type === BaseType.Real) {
-          return this.wasm.f64.store(0, 1, address, exprInstr);
-        } else {
-          return this.wasm.i32.store(0, 1, address, exprInstr);
-        }
+        const wasmType = this.getBinaryenType(entry.type);
+        const size = sizeOf(entry.type)
+        return this.storeValue(address, exprInstr, wasmType, size);
       }
     }
   }
@@ -747,11 +760,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
         const address = this.resolveUpperVariable(entry);
 
         if (isMemoryType(entry.type)) return address;
-        if (wasmType === binaryen.f64) {
-          return this.wasm.f64.load(0, 1, address);
-        } else {
-          return this.wasm.i32.load(0, 1, address);
-        }
+        return this.loadValue(address, wasmType, sizeOf(entry.type));
       }
     }
   }
@@ -763,11 +772,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       return address;
     }
 
-    if (expr.type === BaseType.Real) {
-      return this.wasm.f64.load(0, 1, address);
-    }
+    const type = expr.type as PascalType;
+    const wasmType = this.getBinaryenType(type);
+    const size = sizeOf(type);
 
-    return this.wasm.i32.load(0, 1, address);
+    return this.loadValue(address, wasmType, size);
   }
 
   visitRefer(expr: Expr.Refer): number {

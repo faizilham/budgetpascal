@@ -1036,6 +1036,14 @@ export class Parser {
 
     this.consume(TokenTag.RIGHT_SQUARE, "Expect ']' after expression.");
 
+    if (isString(left.type)) {
+      if (indexes.length > 1) {
+        throw this.errorAt(indexTokens[1], `Invalid multi-dimension operator[] for type ${getTypeName(left.type)}`);
+      }
+
+      return new Expr.Deref(new Expr.Indexer(left, indexes[0]));
+    }
+
     let indexerExpr = left;
     for (let i = 0; i < indexes.length; i++) {
       const index = indexes[i];

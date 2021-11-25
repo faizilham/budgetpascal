@@ -9,6 +9,7 @@ var
   mat: array[1..2] of array[1..6] of integer;
   mat2: matrix26;
   i: integer;
+  str: string[5];
 
   procedure printArray(const arr: int6);
   var i: integer;
@@ -76,4 +77,10 @@ begin
 
   upperArr(arr);
   printArray(arr);
+
+  str := 'hello';
+  writeln(str[2]);
+  str[2] := 'p';
+
+  writeln(str);
 end.

@@ -144,6 +144,7 @@ export function getTypeName(type?: PascalType): string {
 export function sizeOf(type: PascalType): number {
   if (isMemoryType(type)) return type.bytesize;
   if (type === BaseType.Real) return 8;
+  if (type === BaseType.Boolean || type === BaseType.Char) return 1;
   return 4;
 }
 
@@ -207,15 +208,24 @@ export namespace Expr {
       this.stackNeutral = operand.stackNeutral && index.stackNeutral;
       this.assignable = true;
 
-      // TODO: handle string type
-      const operandType = operand.type as ArrayType;
-      this.startIndex = operandType.start;
+      const operandType = operand.type;
 
-      const elementType = operandType.elementType;
-      this.elementSize = sizeOf(elementType);
+      if (isString(operandType)) {
+        this.startIndex = 0; // because str[0] points to its length
+        this.elementSize = sizeOf(BaseType.Char);
+        this.type = new Pointer(BaseType.Char);
+      } else if (isArrayType(operandType)) {
+        this.startIndex = operandType.start;
 
-      this.type = new Pointer(operandType.elementType);
+        const elementType = operandType.elementType;
+        this.elementSize = sizeOf(elementType);
+
+        this.type = new Pointer(elementType);
+      } else {
+        throw new UnreachableErr(`Trying to create Expr.Indexer from ${getTypeName(operandType)}`);
+      }
     }
+
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitIndexer(this);
     }
