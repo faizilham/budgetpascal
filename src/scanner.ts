@@ -331,7 +331,7 @@ export class Scanner {
     const identifier = lexeme.toLowerCase();
 
     const keywordType = KeywordTokens[identifier] || TokenTag.IDENTIFIER;
-    const token = new Token(keywordType, lexeme, this.line, this.columnStart());
+    const token = new Token(keywordType, identifier, this.line, this.columnStart());
 
     switch (keywordType) {
       case TokenTag.TRUE: {
