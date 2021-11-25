@@ -16,6 +16,11 @@ program typedef;
     writeln(r);
   end;
 
+  procedure printReal(r: real);
+  begin
+    writeln(r);
+  end;
+
 begin
   b := 10;
   a := 20;
@@ -27,4 +32,6 @@ begin
   c := char(b);
 
   writeln(c, ' ', custom(c));
+
+  printReal(b);
 end.

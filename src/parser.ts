@@ -885,15 +885,13 @@ export class Parser {
 
     // Type check;
     if (!isTypeEqual(left.type, right.type)) {
-      // valid implicit typecast: integer to real, char to string
-      if (isString(left.type) && right.type === BaseType.Char ) {
-        right = new Expr.Typecast(right, StringType.create(1));
-      } else if (left.type === BaseType.Real && right.type === BaseType.Integer) {
-        right = new Expr.Typecast(right, BaseType.Real)
-      } else {
+      const typecasted = this.implicitTypecast(left.type, right);
+
+      if (typecasted == null) {
         throw this.errorAt(operator,
           `Can't assign value of type ${getTypeName(right.type)} to ${getTypeName(left.type)}`);
       }
+      right = typecasted;
     }
 
     left = this.removeDeref(left);
@@ -919,6 +917,17 @@ export class Parser {
     }
 
     return expr;
+  }
+
+  private implicitTypecast(targetType: PascalType | undefined, source: Expr): Expr | null {
+    // valid implicit typecast: integer to real, char to string
+    if (isString(targetType) && source.type === BaseType.Char ) {
+      return new Expr.Typecast(source, StringType.create(1));
+    } else if (targetType === BaseType.Real && source.type === BaseType.Integer) {
+      return new Expr.Typecast(source, BaseType.Real)
+    } else {
+      return null;
+    }
   }
 
   /** Expression Parsing **/
@@ -986,6 +995,8 @@ export class Parser {
         if (!isPointerTo(params[i].type, sourceExpr.type)) {
           const expectedType = (params[i].type as Pointer).source;
           throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(expectedType)}, got ${getTypeName(sourceExpr.type)}`);
+        } else if (!sourceExpr.assignable) {
+          throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
         }
 
         sourceExpr = this.removeDeref(sourceExpr);
@@ -998,8 +1009,13 @@ export class Parser {
         } else {
           throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
         }
-      } else if (!isTypeEqual(params[i].type, args[i].type)) { // TODO: FIXME: fix this to isAssignable instead of isTypeEqual
-        throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i].type)}, got ${getTypeName(args[i].type)}`);
+      } else if (!isTypeEqual(params[i].type, args[i].type)) {
+        const typecasted = this.implicitTypecast(params[i].type, args[i]);
+        if (typecasted == null) {
+          throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(params[i].type)}, got ${getTypeName(args[i].type)}`);
+        }
+
+        args[i] = typecasted;
       }
     }
 
