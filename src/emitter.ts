@@ -1,7 +1,7 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isPointer, isString, MemoryType, PascalType, sizeOf, StringType } from "./expression";
-import { ParamType, Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
+import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
 
@@ -211,14 +211,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
 
     if (variable.paramVar) {
-      if (variable.paramType === ParamType.CONST && variable.level === VariableLevel.LOCAL) {
-        // optimization: no need to memcopy const var if it's used locally
-        return;
-      } else if (variable.paramType === ParamType.REF) {
-        // refParam is just a pointer
-        return;
-      }
-
       const paramValue = this.wasm.local.get(variable.index, binaryen.i32);
       // copy memory
       if (isString(obj as PascalType)) {

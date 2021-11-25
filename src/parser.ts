@@ -364,7 +364,9 @@ export class Parser {
 
           let [names, type] = this.varDeclaration(true);
 
-          if (paramType === ParamType.REF) type = new Pointer(type);
+          if ((paramType === ParamType.REF) || (paramType === ParamType.CONST && isMemoryType(type))) {
+            type = new Pointer(type);
+          }
 
           params.push([names, type, paramType]);
         } while(!this.check(TokenTag.RIGHT_PAREN) && this.match(TokenTag.SEMICOLON));
@@ -955,13 +957,9 @@ export class Parser {
           }
           entry.level = VariableLevel.UPPER;
         }
-
         entry.usedCount++; //TODO: usedcount?
 
         let expr: Expr = new Expr.Variable(entry);
-
-        // if (entry.paramVar && entry.paramType === ParamType.REF) {
-        // }
 
         if (isPointer(entry.type)) {
           expr = new Expr.Deref(expr);
@@ -1008,6 +1006,12 @@ export class Parser {
           args[i] = new Expr.Refer(sourceExpr);
         } else {
           throw this.errorAt(subname, `Invalid argument #${i + 1}. Expect assignable variable.`);
+        }
+      } else if (params[i].paramType === ParamType.CONST && isPointer(params[i].type)) {
+        const expectedType = (params[i].type as Pointer).source;
+
+        if (!isMemoryType(args[i].type) && !isTypeEqual(expectedType, args[i].type)) {
+          throw this.errorAt(subname, `Mismatch type at argument #${i + 1}. Expect ${getTypeName(expectedType)}, got ${getTypeName(args[i].type)}`);
         }
       } else if (!isTypeEqual(params[i].type, args[i].type)) {
         const typecasted = this.implicitTypecast(params[i].type, args[i]);

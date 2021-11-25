@@ -18,6 +18,15 @@ var
     writeln;
   end;
 
+  procedure printInner(const arr: int6);
+    procedure inner;
+    begin
+      printArray(arr);
+    end;
+  begin
+    inner;
+  end;
+
   procedure fillArray(var arr: int6);
   var i: integer;
   begin
@@ -97,4 +106,6 @@ begin
   str[2] := 'p';
 
   writeln(str);
+
+  printInner(mat[2]);
 end.
