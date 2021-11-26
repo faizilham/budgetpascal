@@ -30,19 +30,3 @@ begin
   printPos('defg', str);
   printPos('evg', str);
 end.
-{
-5 hello
-7 hello w
-3 4
-a 1
-b 2
-c 3
-d 4
-e 5
-f 6
-g 7
-h 0
-abc 1
-defg 4
-evg 0
-}

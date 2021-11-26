@@ -1,0 +1,8 @@
+input: 123 456 7.89e+0 x
+hello!
+cello!
+1 12 34
+readInt 88
+88
+readIntInner 98
+98
