@@ -1,6 +1,7 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isOrdinal, isNumberType as isNumberType, isTypeEqual, PascalType, StringType, isString, isStringLike, isPointer, isPointerTo, isMemoryType, Pointer, ArrayType, RecordType, isRecord } from "./expression";
-import { IdentifierType, ParamType, Program, Routine, Stmt, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
+import { Expr, Stmt } from "./ast";
+import { ArrayType, BaseType, getTypeName, isBool, isMemoryType, isNumberType, isOrdinal, isPointer, isPointerTo, isRecord, isString, isStringLike, isTypeEqual, PascalType, Pointer, RecordType, StringType } from "./types"
+import { IdentifierType, ParamType, Program, Routine, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 
 type VarDeclarationPairs = [Token[], PascalType];

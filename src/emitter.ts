@@ -1,7 +1,8 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isArrayType, isBool, isMemoryType, isOrdinal, isPointer, isPointerTo, isString, MemoryType, PascalType, Pointer, sizeOf, StringType } from "./expression";
-import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
+import { Expr, Stmt } from "./ast";
+import { BaseType, getTypeName, isArrayType, isBool, isMemoryType, isOrdinal, isPointer, isPointerTo, isString, MemoryType, PascalType, Pointer, sizeOf, StringType } from "./types"
+import { Program, Routine, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
 

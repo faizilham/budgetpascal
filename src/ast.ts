@@ -1,187 +1,7 @@
 import { UnreachableErr } from "./errors";
 import { Subroutine, VariableEntry } from "./routine";
 import { Token } from "./scanner";
-
-const ARRAY_HEADER_SIZE = 4;
-
-export type PascalType = BaseType | MemoryType | Pointer;
-
-export enum BaseType {
-  Void,
-  Boolean,
-  Char,
-  Integer,
-  Real,
-}
-
-export interface MemoryType {
-  bytesize: number
-  typename(): string;
-}
-
-export class StringType implements MemoryType {
-  bytesize: number;
-  private constructor(public size: number){
-    this.bytesize = size + 1;
-  }
-
-  private static sizes: {[key: number]: StringType} = {};
-
-  static create(size: number = 255): StringType {
-    let strtype = StringType.sizes[size];
-
-    if (strtype == null) {
-      strtype = new StringType(size);
-      StringType.sizes[size] = strtype;
-    }
-
-    return strtype;
-  }
-
-  typename(): string {
-    return this.size < 255 ? `String[${this.size}]` : "String";
-  }
-}
-
-export class ArrayType implements MemoryType {
-  bytesize: number;
-  length: number;
-  constructor(public start: number, public end: number, public elementType: PascalType) {
-    this.length = end - start + 1;
-    const elementSize = sizeOf(elementType);
-    this.bytesize = ARRAY_HEADER_SIZE + this.length * elementSize;
-  }
-
-  equalTo(arr: ArrayType) {
-    return this.start === arr.start && this.end === arr.end && isTypeEqual(this.elementType, arr.elementType);
-  }
-
-  typename(): string {
-    let type: PascalType = this;
-    const dimensions = [];
-
-    do {
-      const arrtype = type as ArrayType;
-      dimensions.push(`${arrtype.start}..${arrtype.end}`);
-      type = arrtype.elementType;
-    } while(type instanceof ArrayType);
-
-    return `Array[${dimensions.join(", ")}] of ${getTypeName(type)}`;
-  }
-}
-
-export class RecordType implements MemoryType {
-  bytesize: number;
-  name: string;
-  fields: {[key: string]: {type: PascalType, offset: number}};
-
-  constructor() {
-    this.bytesize = 0;
-    this.name = "";
-    this.fields = {};
-  }
-
-  addField(name: string, type: PascalType): boolean {
-    if (this.fields[name] != null) return false;
-
-    const size = sizeOf(type);
-    const offset = this.bytesize;
-    this.bytesize += size;
-
-    this.fields[name] = {type, offset};
-
-    return true;
-  }
-
-  typename(): string {
-    return this.name.length === 0 ? '""' : this.name;
-  }
-}
-
-export class Pointer {
-  constructor(public source: PascalType) {}
-}
-
-export function isBaseType(type?: PascalType): type is BaseType {
-  return !isNaN(type as any);
-}
-
-export function isNumberType(type?: PascalType): boolean {
-  return type === BaseType.Integer || type === BaseType.Real;
-}
-
-export function isOrdinal(type?: PascalType): boolean {
-  return type === BaseType.Integer || type === BaseType.Boolean || type === BaseType.Char;
-}
-
-export function isBool(type?: PascalType): boolean {
-  return type === BaseType.Boolean;
-}
-
-export function isMemoryType(type?: PascalType): type is MemoryType {
-  return type != null && (type as MemoryType).bytesize != null;
-}
-
-export function isString(type?: PascalType): type is StringType {
-  return type != null && (type as StringType).size != null;
-}
-
-export function isStringLike(type?: PascalType): boolean {
-  return type === BaseType.Char || isString(type);
-}
-
-export function isArrayType(type?: PascalType): type is ArrayType {
-  return type != null && (type as ArrayType).elementType != null;
-}
-
-export function isArrayOf(arrType?: PascalType, elementType?: PascalType): boolean {
-  return isArrayType(arrType) && isTypeEqual(arrType.elementType, elementType);
-}
-
-export function isRecord(type?: PascalType): type is RecordType {
-  return type != null && (type as RecordType).fields != null;
-}
-
-export function isPointer(type?: PascalType): type is Pointer {
-  return type != null && (type as Pointer).source != null;
-}
-
-type TypeCheckFunc = (type?: PascalType) => boolean;
-
-export function isPointerTo(ptrType?: PascalType, testType?: PascalType | TypeCheckFunc): boolean {
-  if (!isPointer(ptrType)) return false;
-
-  if (testType instanceof Function) {
-    return testType(ptrType.source);
-  }
-
-  return isTypeEqual(ptrType.source, testType);
-}
-
-export function isTypeEqual(a?: PascalType, b?: PascalType): boolean {
-  if (a == null || b == null) return false;
-  if (a === b) return true;
-  if (isString(a) && isString(b)) return true;
-  if (isPointer(a) && isPointer(b)) return isTypeEqual(a.source, b.source);
-  if (isArrayType(a) && isArrayType(b)) return a.equalTo(b);
-  // record types are unique, so it needs to equal like a === b
-
-  return false;
-}
-
-export function getTypeName(type?: PascalType): string {
-  if (type == null || type === BaseType.Void) return "untyped";
-  else if (isBaseType(type)) return BaseType[type];
-  else if (isMemoryType(type)) return type.typename();
-  return `Unknown`;
-}
-
-export function sizeOf(type: PascalType): number {
-  if (isMemoryType(type)) return type.bytesize;
-  if (type === BaseType.Real) return 8;
-  if (type === BaseType.Boolean || type === BaseType.Char) return 1;
-  return 4;
-}
+import { ARRAY_HEADER_SIZE, BaseType, getTypeName, isArrayType, isBaseType, isPointer, isString, PascalType, Pointer, sizeOf, StringType } from "./types";
 
 export abstract class Expr {
   assignable: boolean = false;
@@ -412,5 +232,151 @@ export namespace Expr {
     visitStringConcat(expr: StringConcat): T;
     visitStringCompare(expr: StringCompare): T;
     visitTypecast(expr: Typecast): T;
+  }
+}
+
+
+/* Statement Tree */
+export abstract class Stmt {
+  public abstract accept<T>(visitor: Stmt.Visitor<T>): T;
+}
+
+export namespace Stmt {
+  export class CallStmt extends Stmt {
+    constructor(public callExpr: Expr.Call, public tempVar: VariableEntry) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitCallStmt(this);
+    }
+  }
+
+  export class Compound extends Stmt {
+    constructor(public statements: Stmt[]) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitCompound(this);
+    }
+  }
+
+  export class ForLoop extends Stmt {
+    constructor(public initializations: Stmt[], public condition: Expr,
+      public increment: Stmt, public body: Stmt){
+        super()
+      }
+
+      public accept<T>(visitor: Visitor<T>): T {
+        return visitor.visitForLoop(this);
+      }
+  }
+
+  export class IfElse extends Stmt {
+    constructor(public condition: Expr, public body?: Stmt, public elseBody?: Stmt) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitIfElse(this);
+    }
+  }
+
+  export class Increment extends Stmt {
+    constructor(public target: Expr.Variable, public ascending: boolean) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitIncrement(this);
+    }
+  }
+
+  export class LoopControl extends Stmt {
+    constructor(public token: Token){ super(); }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitLoopControl(this);
+    }
+  }
+
+  export class Read extends Stmt {
+    constructor(public targets: Expr[], public newline: boolean) {
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitRead(this);
+    }
+  }
+
+  export class RepeatUntil extends Stmt {
+    constructor(public finishCondition: Expr, public statements: Stmt[]) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitRepeatUntil(this);
+    }
+  }
+
+  export class SetString extends Stmt {
+    constructor(public target: Expr, public value: Expr) {
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitSetString(this);
+    }
+  }
+
+  export class SetMemory extends Stmt {
+    constructor(public target: Expr, public value: Expr) {
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitSetMemory(this);
+    }
+  }
+
+  export class SetVariable extends Stmt {
+    constructor(public target: Expr.Variable, public value: Expr) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitSetVariable(this);
+    }
+  }
+
+  export class WhileDo extends Stmt {
+    constructor(public condition: Expr, public body: Stmt) {
+      super();
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitWhileDo(this);
+    }
+  }
+
+  export class Write extends Stmt {
+    constructor(public outputs: Expr[], public newline: boolean) {
+      super();
+    }
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitWrite(this);
+    }
+  }
+
+  export interface Visitor<T> {
+    visitCallStmt(stmt: CallStmt): T;
+    visitCompound(stmt: Compound): T;
+    visitForLoop(stmt: ForLoop): T;
+    visitIfElse(stmt: IfElse): T;
+    visitIncrement(stmt: Increment): T;
+    visitLoopControl(stmt: LoopControl): T;
+    visitRead(stmt: Read): T;
+    visitRepeatUntil(stmt: RepeatUntil): T;
+    visitSetString(stmt: SetString): T;
+    visitSetMemory(stmt: SetMemory): T;
+    visitSetVariable(stmt: SetVariable): T;
+    visitWhileDo(stmt: WhileDo): T;
+    visitWrite(stmt: Write): T;
   }
 }
