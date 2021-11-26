@@ -1,6 +1,6 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
-import { BaseType, Expr, getTypeName, isBool, isMemoryType, isOrdinal, isPointer, isPointerTo, isString, MemoryType, PascalType, Pointer, sizeOf, StringType } from "./expression";
+import { BaseType, Expr, getTypeName, isArrayType, isBool, isMemoryType, isOrdinal, isPointer, isPointerTo, isString, MemoryType, PascalType, Pointer, sizeOf, StringType } from "./expression";
 import { Program, Routine, Stmt, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -223,6 +223,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
           this.wasm.memory.copy(this.runtime.stackTop(), paramValue, this.wasm.i32.const(obj.bytesize))
         );
       }
+    } else if (isArrayType(obj)) {
+      this.currentBlock.push(
+        this.wasm.i32.store(0, 1, this.runtime.stackTop(), this.wasm.i32.const(obj.length))
+      );
     }
 
     // set address
@@ -808,7 +812,12 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     const elementSize = this.wasm.i32.const(expr.elementSize);
 
-    return this.wasm.i32.add(address, this.wasm.i32.mul(index, elementSize));
+    const offset = this.wasm.i32.add(
+      this.wasm.i32.mul(index, elementSize),
+      this.wasm.i32.const(expr.headerOffset)
+    );
+
+    return this.wasm.i32.add(address, offset);
   }
 
   visitInRange(expr: Expr.InRange): number {

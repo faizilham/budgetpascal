@@ -10,6 +10,7 @@ var
   mat2: matrix26;
   i: integer;
   str: string[5];
+  arr3: array[4..7] of integer;
 
   procedure printArray(const arr: int6);
   var i: integer;
@@ -108,4 +109,10 @@ begin
   writeln(str);
 
   printInner(mat[2]);
+
+  for i := 1 to 4 do begin
+    arr3[i + 3] := i;
+  end;
+
+  writeln(arr3[4], arr3[5], arr3[6], arr3[7]);
 end.

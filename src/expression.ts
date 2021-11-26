@@ -2,6 +2,8 @@ import { UnreachableErr } from "./errors";
 import { Subroutine, VariableEntry } from "./routine";
 import { Token } from "./scanner";
 
+const ARRAY_HEADER_SIZE = 4;
+
 export type PascalType = BaseType | MemoryType | Pointer;
 
 export enum BaseType {
@@ -47,7 +49,7 @@ export class ArrayType implements MemoryType {
   constructor(public start: number, public end: number, public elementType: PascalType) {
     this.length = end - start + 1;
     const elementSize = sizeOf(elementType);
-    this.bytesize = this.length * elementSize;
+    this.bytesize = ARRAY_HEADER_SIZE + this.length * elementSize;
   }
 
   equalTo(arr: ArrayType) {
@@ -249,6 +251,7 @@ export namespace Expr {
   export class Indexer extends Expr {
     startIndex: number
     elementSize: number;
+    headerOffset: number
     constructor(public operand: Expr, public index: Expr) {
       super();
       this.stackNeutral = operand.stackNeutral && index.stackNeutral;
@@ -257,12 +260,13 @@ export namespace Expr {
       const operandType = operand.type;
 
       if (isString(operandType)) {
-        this.startIndex = 0; // because str[0] points to its length
+        this.startIndex = 1;
         this.elementSize = sizeOf(BaseType.Char);
         this.type = new Pointer(BaseType.Char);
+        this.headerOffset = 1;
       } else if (isArrayType(operandType)) {
         this.startIndex = operandType.start;
-
+        this.headerOffset = ARRAY_HEADER_SIZE;
         const elementType = operandType.elementType;
         this.elementSize = sizeOf(elementType);
 
