@@ -15,16 +15,16 @@ export namespace Runtime {
 }
 
 const importFunctions: {[key: string]: [number, number]} = {
-  "rtl.$putint": [params(binaryen.i32, binaryen.i32), binaryen.none],
-  "rtl.$putreal": [binaryen.f64, binaryen.none],
-  "rtl.$putln": [binaryen.none, binaryen.none],
-  "rtl.$putstr": [ binaryen.i32, binaryen.none],
+  "io.$putint": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "io.$putreal": [binaryen.f64, binaryen.none],
+  "io.$putln": [binaryen.none, binaryen.none],
+  "io.$putstr": [ binaryen.i32, binaryen.none],
 
-  "rtl.$readint": [binaryen.none, binaryen.i32],
-  "rtl.$readchar": [binaryen.none, binaryen.i32],
-  "rtl.$readreal": [binaryen.none, binaryen.f64],
-  "rtl.$readstr": [params(binaryen.i32, binaryen.i32), binaryen.none],
-  "rtl.$readln": [binaryen.none, binaryen.none],
+  "io.$readint": [binaryen.none, binaryen.i32],
+  "io.$readchar": [binaryen.none, binaryen.i32],
+  "io.$readreal": [binaryen.none, binaryen.f64],
+  "io.$readstr": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "io.$readln": [binaryen.none, binaryen.none],
 };
 
 export class RuntimeBuilder {
@@ -450,48 +450,48 @@ export class RuntimeBuilder {
   /* Imports */
 
   putInt(operand: number, mode: number): number {
-    this.importsUsed.add("rtl.$putint");
-    return this.wasm.call("rtl.$putint", [operand, this.wasm.i32.const(mode)], binaryen.none);
+    this.importsUsed.add("io.$putint");
+    return this.wasm.call("io.$putint", [operand, this.wasm.i32.const(mode)], binaryen.none);
   }
 
   putReal(operand: number): number {
-    this.importsUsed.add("rtl.$putreal");
-    return this.wasm.call("rtl.$putreal", [operand], binaryen.none);
+    this.importsUsed.add("io.$putreal");
+    return this.wasm.call("io.$putreal", [operand], binaryen.none);
   }
 
   putStr(addr: number): number {
-    this.importsUsed.add("rtl.$putstr");
-    return this.wasm.call("rtl.$putstr", [addr], binaryen.none);
+    this.importsUsed.add("io.$putstr");
+    return this.wasm.call("io.$putstr", [addr], binaryen.none);
   }
 
   putLn(): number {
-    this.importsUsed.add("rtl.$putln");
-    return this.wasm.call("rtl.$putln", [], binaryen.none);
+    this.importsUsed.add("io.$putln");
+    return this.wasm.call("io.$putln", [], binaryen.none);
   }
 
   readInt(): number {
-    this.importsUsed.add("rtl.$readint");
-    return this.wasm.call("rtl.$readint", [], binaryen.i32);
+    this.importsUsed.add("io.$readint");
+    return this.wasm.call("io.$readint", [], binaryen.i32);
   }
 
   readChar(): number {
-    this.importsUsed.add("rtl.$readchar");
-    return this.wasm.call("rtl.$readchar", [], binaryen.i32);
+    this.importsUsed.add("io.$readchar");
+    return this.wasm.call("io.$readchar", [], binaryen.i32);
   }
 
   readReal(): number {
-    this.importsUsed.add("rtl.$readreal");
-    return this.wasm.call("rtl.$readreal", [], binaryen.f64);
+    this.importsUsed.add("io.$readreal");
+    return this.wasm.call("io.$readreal", [], binaryen.f64);
   }
 
   readStr(addr: number, maxSize: number): number {
-    this.importsUsed.add("rtl.$readstr");
-    return this.wasm.call("rtl.$readstr", [addr, this.wasm.i32.const(maxSize)], binaryen.none);
+    this.importsUsed.add("io.$readstr");
+    return this.wasm.call("io.$readstr", [addr, this.wasm.i32.const(maxSize)], binaryen.none);
   }
 
   readLn(): number {
-    this.importsUsed.add("rtl.$readln");
-    return this.wasm.call("rtl.$readln", [], binaryen.none);
+    this.importsUsed.add("io.$readln");
+    return this.wasm.call("io.$readln", [], binaryen.none);
   }
 }
 

@@ -29,7 +29,7 @@ export function createImports(runner: Runner): Object {
   }
 
   const importObject = {
-    rtl: {
+    io: {
       $putint: (n: number, mode: number) => {
         switch(mode) {
           case 1: runner.sendCommand("write", String.fromCharCode(n)); break;
