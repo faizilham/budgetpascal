@@ -26,3 +26,5 @@ a 4
 23 21 3
 3
 ABCDEF
+included: e
+excluded: 8

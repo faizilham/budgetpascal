@@ -566,10 +566,9 @@ export class Parser {
   }
 
   private caseMatchCondition(tempVar: Expr.Variable): Expr {
-    const allowedValues = [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.REAL,
-      TokenTag.TRUE, TokenTag.FALSE, TokenTag.STRING];
+    const allowedValues = [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.TRUE, TokenTag.FALSE];
 
-    this.consumeAny(allowedValues, "Expect literal value.");
+    this.consumeAny(allowedValues, "Expect ordinal literal value.");
     let startToken = this.previous;
     let startVal = this.literals(startToken);
 
@@ -1123,6 +1122,48 @@ export class Parser {
     return new Expr.Deref(new Expr.Field(left, fieldData.offset, fieldData.type));
   }
 
+  private inRange(left: Expr): Expr {
+    this.consume(TokenTag.LEFT_SQUARE, "Expect '['.");
+
+    const allowedValues = [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.TRUE, TokenTag.FALSE];
+    const ranges: number[] = [];
+
+    do {
+      this.consumeAny(allowedValues, "Expect ordinal literal value.");
+      const startToken = this.previous;
+      const startVal = this.literals(startToken);
+
+      if (!isTypeEqual(left.type, startVal.type)) {
+        throw this.errorAtPrevious(`Invalid comparison between type ${getTypeName(left.type)} and ${getTypeName(startVal.type)}`);
+      }
+
+      ranges.push(startVal.literal);
+
+      if (!this.match(TokenTag.RANGE)) {
+        ranges.push(startVal.literal);
+        continue;
+      }
+
+      this.consumeAny(allowedValues, "Expect ordinal literal value after '..'.");
+      const endToken = this.previous;
+      const endVal = this.literals(endToken);
+
+      if (!isTypeEqual(startVal.type, endVal.type)) {
+        throw this.errorAtPrevious("Invalid range expression.");
+      }
+
+      ranges.push(endVal.literal);
+
+    } while(this.match(TokenTag.COMMA));
+
+    this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
+
+    const tempvar = this.reserveTempVariable(left.type as PascalType);
+    this.releaseTempVariable(tempvar);
+
+    return new Expr.InRange(tempvar, left, ranges);
+  }
+
   private parsePrecedence(precedence: Precedence): Expr {
     this.advance();
 
@@ -1350,7 +1391,7 @@ export class Parser {
     return new Expr.StringCompare(operator, left, right);
   }
 
-  private literals(constant?: Token): Expr {
+  private literals(constant?: Token): Expr.Literal {
     const token = constant || this.previous;
     let literal: number = 0;
     let type: PascalType | null = null;
@@ -1514,6 +1555,7 @@ export class Parser {
       [TokenTag.GREATER_EQ]: entry(null, parser.binary, Precedence.Relational),
       [TokenTag.LESS_EQ]:    entry(null, parser.binary, Precedence.Relational),
       [TokenTag.NOT_EQ]:     entry(null, parser.binary, Precedence.Relational),
+      [TokenTag.IN]:         entry(null, parser.inRange, Precedence.Relational),
 
       [TokenTag.AND]:        entry(null, parser.binary, Precedence.Products),
       [TokenTag.OR]:         entry(null, parser.binary, Precedence.Sums),

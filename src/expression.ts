@@ -277,6 +277,22 @@ export namespace Expr {
     }
   }
 
+  export class InRange extends Expr {
+    constructor(public tempVar: VariableEntry, public checkExpr: Expr, public ranges: number[]) {
+      super();
+      this.stackNeutral = checkExpr.stackNeutral;
+      this.type = BaseType.Boolean;
+
+      if (ranges.length % 2 !== 0) {
+        throw new UnreachableErr("Incomplete range");
+      }
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitInRange(this);
+    }
+  }
+
   export class Literal extends Expr {
     constructor(public type: PascalType, public literal: number){
       super();
@@ -383,6 +399,7 @@ export namespace Expr {
     visitBinary(expr: Binary): T;
     visitField(expr: Field): T;
     visitIndexer(expr: Indexer): T;
+    visitInRange(expr: InRange): T;
     visitLiteral(expr: Literal): T;
     visitShortCircuit(expr: ShortCircuit): T;
     visitVariable(expr: Variable): T;

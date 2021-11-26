@@ -811,6 +811,45 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     return this.wasm.i32.add(address, this.wasm.i32.mul(index, elementSize));
   }
 
+  visitInRange(expr: Expr.InRange): number {
+    const checkValue = expr.checkExpr.accept(this);
+    const getval = () => this.getVariableValue(expr.tempVar);
+    const constant = (n: number) => this.wasm.i32.const(n);
+
+    const block = [ this.setVariable(expr.tempVar, checkValue) ];
+
+    let comparator: number | null = null;
+
+    for (let i = 0; i < expr.ranges.length; i += 2) {
+      const startVal = expr.ranges[i];
+      const endVal = expr.ranges[i+1];
+
+      let compare;
+      if (startVal === endVal) {
+        compare = this.wasm.i32.eq(getval(), constant(startVal));
+      } else {
+        compare = this.wasm.i32.and(
+          this.wasm.i32.le_s(constant(startVal), getval()),
+          this.wasm.i32.le_s(getval(), constant(endVal))
+        );
+      }
+
+      if (comparator == null) {
+        comparator = compare;
+      } else {
+        comparator = this.wasm.i32.or(comparator, compare);
+      }
+    }
+
+    if (comparator == null) {
+      block.push(constant(0));
+    } else {
+      block.push(comparator);
+    }
+
+    return this.wasm.block("", block, binaryen.i32);
+  }
+
   visitUnary(expr: Expr.Unary): number {
     const operand = expr.operand.accept(this);
 

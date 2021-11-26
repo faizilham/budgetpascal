@@ -105,4 +105,18 @@ begin
     if c = #70 then break;
   end;
   writeln;
+
+  c := 'e';
+
+  if c in ['a', 'x'..'z', 'c'..'f'] then
+    writeln('included: ', c)
+  else
+    writeln('excluded: ', c);
+
+  a := 8;
+  if a in [88..100, 6, 9..12] then
+    writeln('included: ', a)
+  else
+    writeln('excluded: ', a);
+
 end.
