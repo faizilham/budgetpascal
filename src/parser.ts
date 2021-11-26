@@ -3,6 +3,7 @@ import { Expr, Stmt } from "./ast";
 import { ArrayType, BaseType, getTypeName, isBool, isMemoryType, isNumberType, isOrdinal, isPointer, isPointerTo, isRecord, isString, isStringLike, isTypeEqual, PascalType, Pointer, RecordType, StringType } from "./types"
 import { IdentifierType, ParamType, Program, Routine, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
+import { LibraryFunction, Runtime } from "./runtime";
 
 type VarDeclarationPairs = [Token[], PascalType];
 type ParamDeclarationTuple = [Token[], PascalType, ParamType];
@@ -18,6 +19,7 @@ export class Parser {
   loopLevel: number;
   stringLiterals: StringTable;
   functionId: number;
+  libraryUsed: string[];
 
   constructor(public text: string, logger?: ErrLogger.Reporter) {
     this.precedenceRule = this.buildPrecedence();
@@ -31,6 +33,7 @@ export class Parser {
     this.loopLevel = 0;
     this.functionId = 1;
     this.stringLiterals = new Map();
+    this.libraryUsed = ["rtl"];
   }
 
   parse(): Program | undefined  {
@@ -844,7 +847,7 @@ export class Parser {
     try {
       expr = this.expression();
 
-      if (expr instanceof Expr.Call) {
+      if (expr instanceof Expr.Call || expr instanceof Expr.CallLib) {
         tempNotUsed = false;
         return new Stmt.CallStmt(expr, tempVar);
       }
@@ -944,7 +947,12 @@ export class Parser {
     const varToken = this.previous;
 
     const entry = this.currentRoutine.findIdentifier(varToken.lexeme);
-    if (!entry) throw this.errorAtPrevious(`Unknown identifier '${varToken.lexeme}'.`);
+    if (!entry) {
+      const libfuncs = Runtime.findLibraryFunctions(this.libraryUsed, varToken.lexeme);
+      if (libfuncs != null) return this.callLibExpr(libfuncs);
+
+      throw this.errorAtPrevious(`Unknown identifier '${varToken.lexeme}'.`);
+    }
 
     switch(entry.entryType) {
       case IdentifierType.Constant: return this.literals(entry.value);
@@ -1043,6 +1051,48 @@ export class Parser {
     }
 
     return [args, hasParentheses];
+  }
+
+  private callLibExpr(callCandidates: LibraryFunction[]): Expr{
+    const funcName = this.previous;
+    const [args, _] = this.callArgs();
+
+    for(const func of callCandidates) {
+      const params = func.params;
+      if (params.length !== args.length) continue;
+
+      let match = true;
+      let typecastedArgs = [];
+      for (let i = 0; i < params.length; i++) {
+        const param = params[i];
+        let arg = args[i];
+
+        if (param instanceof Function) {
+          // assumption: if it's a function, it's probably can't also be typecasted
+          if (!param(arg.type)){
+            match = false;
+            break;
+          }
+        } else if (!isTypeEqual(param, arg.type)) {
+          const typecasted = this.implicitTypecast(param, arg);
+
+          if (typecasted == null) {
+            match = false;
+            break;
+          }
+          arg = typecasted;
+        }
+
+        typecastedArgs.push(arg);
+      }
+
+      if (!match) continue;
+
+      return new Expr.CallLib(func, typecastedArgs);
+    }
+
+    const argtypes = args.map(arg => getTypeName(arg.type)).join(", ");
+    throw this.errorAt(funcName, `Unknown library call "${funcName.lexeme}" with parameter of types (${argtypes})`);
   }
 
   private typecast(targetType: PascalType): Expr {

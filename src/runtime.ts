@@ -1,4 +1,5 @@
 import binaryen from "binaryen";
+import * as Types from "./types";
 
 export namespace Runtime {
   export const DATA_ADDRESS = 0;
@@ -13,19 +14,6 @@ export namespace Runtime {
   export const PUTINT_MODE_CHAR = 1;
   export const PUTINT_MODE_BOOL = 2;
 }
-
-const importFunctions: {[key: string]: [number, number]} = {
-  "io.$putint": [params(binaryen.i32, binaryen.i32), binaryen.none],
-  "io.$putreal": [binaryen.f64, binaryen.none],
-  "io.$putln": [binaryen.none, binaryen.none],
-  "io.$putstr": [ binaryen.i32, binaryen.none],
-
-  "io.$readint": [binaryen.none, binaryen.i32],
-  "io.$readchar": [binaryen.none, binaryen.i32],
-  "io.$readreal": [binaryen.none, binaryen.f64],
-  "io.$readstr": [params(binaryen.i32, binaryen.i32), binaryen.none],
-  "io.$readln": [binaryen.none, binaryen.none],
-};
 
 export class RuntimeBuilder {
   private importsUsed: Set<string>
@@ -447,7 +435,7 @@ export class RuntimeBuilder {
     );
   }
 
-  /* Imports */
+  /* IO */
 
   putInt(operand: number, mode: number): number {
     this.importsUsed.add("io.$putint");
@@ -493,8 +481,168 @@ export class RuntimeBuilder {
     this.importsUsed.add("io.$readln");
     return this.wasm.call("io.$readln", [], binaryen.none);
   }
+
+  /* Libraries */
+
+  callLibrary(libfunc: LibraryFunction, operands: number[]): number {
+    if (!libfunc.builder) {
+      this.importsUsed.add(libfunc.name);
+    } else if (!libfunc.built) {
+      libfunc.builder(this.wasm, libfunc);
+      libfunc.built = true;
+    }
+
+    return this.wasm.call(libfunc.name, operands, getBinaryenType(libfunc.returnType))
+  }
+}
+
+export function getBinaryenType(type: Types.PascalType) {
+  switch(type) {
+    case Types.BaseType.Real: return binaryen.f64;
+    case Types.BaseType.Void: return binaryen.none;
+    default:
+      // int, char, boolean, and pointers are all i32
+      return binaryen.i32;
+  }
 }
 
 function params(...types: number[]) {
   return binaryen.createType(types);
+}
+
+export class LibraryFunction {
+  built: boolean;
+  constructor(public name: string, public returnType: Types.PascalType,
+    public params: Array<Types.PascalType | Types.TypeCheckFunc>, public builder: BuilderFunc | null) {
+     this.built = !builder;
+  }
+}
+
+type BuilderFunc = (wasm: binaryen.Module, libfunc: LibraryFunction) => void;
+
+export namespace Runtime {
+  export type Library = {[key: string]: LibraryFunction[]};
+  const library: {[key: string]: Library} = {
+    "rtl": rtl()
+  };
+
+  export function hasLibrary(libname: string): boolean {
+    return library[libname] != null;
+  }
+
+  export function findLibraryFunctions(libnames: string[], funcName: string): LibraryFunction[] | null {
+    for (let libname of libnames) {
+      const lib = library[libname];
+      if (!lib) continue;
+
+      if (lib[funcName]) return lib[funcName];
+    }
+
+    return null;
+  }
+}
+
+const importFunctions: {[key: string]: [number, number]} = {
+  "io.$putint": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "io.$putreal": [binaryen.f64, binaryen.none],
+  "io.$putln": [binaryen.none, binaryen.none],
+  "io.$putstr": [ binaryen.i32, binaryen.none],
+
+  "io.$readint": [binaryen.none, binaryen.i32],
+  "io.$readchar": [binaryen.none, binaryen.i32],
+  "io.$readreal": [binaryen.none, binaryen.f64],
+  "io.$readstr": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "io.$readln": [binaryen.none, binaryen.none],
+
+  /* rtl */
+  "rtl.$pos": [params(binaryen.i32, binaryen.i32), binaryen.i32]
+};
+
+function rtl(): Runtime.Library {
+  return {
+    "length": [
+      new LibraryFunction("rtl.$lenstr", Types.BaseType.Integer, [Types.StringType.create()], lenstr),
+      new LibraryFunction("rtl.$lenarr", Types.BaseType.Integer, [Types.isArrayType], lenarr),
+    ],
+    "pos": [
+      new LibraryFunction("rtl.$posc", Types.BaseType.Integer, [Types.BaseType.Char, Types.StringType.create()], posc),
+      new LibraryFunction("rtl.$pos", Types.BaseType.Integer, [Types.StringType.create(), Types.StringType.create()], null),
+    ]
+  }
+}
+
+/* native library implementations */
+
+function lenstr(wasm: binaryen.Module, libfunc: LibraryFunction) {
+  // params: 0 address
+  const address = 0;
+
+  const resultType = getBinaryenType(libfunc.returnType);
+  wasm.addFunction(libfunc.name, binaryen.i32, resultType, [],
+    wasm.i32.load8_u(0, 1, wasm.local.get(address, binaryen.i32))
+  );
+}
+
+function lenarr(wasm: binaryen.Module, libfunc: LibraryFunction) {
+  // params: 0 address
+  const address = 0;
+
+  const resultType = getBinaryenType(libfunc.returnType);
+  wasm.addFunction(libfunc.name, binaryen.i32, resultType, [],
+    wasm.i32.load(0, 1, wasm.local.get(address, binaryen.i32))
+  );
+}
+
+function posc(wasm: binaryen.Module, libfunc: LibraryFunction) {
+  // params: 0 char substring, 1 str source
+  const substr = 0;
+  const source = 1;
+
+  // local var
+  const last = 2;
+  const index = 3;
+  const element = 4;
+
+  const getmem = (ptr: number) => wasm.i32.load8_u(0, 1, ptr);
+  const getlocal = (id: number) => wasm.local.get(id, binaryen.i32);
+  const setlocal = (id: number, expr: number) => wasm.local.set(id, expr);
+  const constant = (n: number) => wasm.i32.const(n);
+  const add = (left: number, right: number) => wasm.i32.add(left, right);
+  const eq = (left: number, right: number) => wasm.i32.eq(left, right);
+
+  const outerblock = libfunc.name + ".outer";
+  const loopblock = libfunc.name + ".loop";
+
+  const resultType = getBinaryenType(libfunc.returnType);
+  wasm.addFunction(libfunc.name, params(binaryen.i32, binaryen.i32), resultType,
+    [binaryen.i32, binaryen.i32, binaryen.i32], wasm.block(outerblock, [
+      // last = mem[source];
+      setlocal(last, getmem(getlocal(source))),
+
+      // index = 1;
+      setlocal(index, constant(1)),
+
+      wasm.loop(loopblock, wasm.block("", [
+        // element = mem[source + index];
+        setlocal(element, getmem( add( getlocal(source), getlocal(index) )) ),
+
+        // if (element === substr) return index;
+        wasm.if(
+          eq(getlocal(element), getlocal(substr)),
+          wasm.return(getlocal(index))
+        ),
+
+        // if (index === last) return 0;
+        wasm.if(
+          eq(getlocal(index), getlocal(last)),
+          wasm.return(constant(0))
+        ),
+
+        // index += 1;
+        setlocal(index, add(getlocal(index), constant(1))),
+
+        // loop back
+        wasm.br(loopblock)
+      ]))
+    ]));
 }

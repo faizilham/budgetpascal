@@ -3,7 +3,7 @@ import { UnreachableErr } from "./errors";
 import { Expr, Stmt } from "./ast";
 import { BaseType, getTypeName, isArrayType, isBool, isMemoryType, isOrdinal, isPointer, isPointerTo, isString, MemoryType, PascalType, Pointer, sizeOf, StringType } from "./types"
 import { Program, Routine, Subroutine, VariableEntry, VariableLevel } from "./routine";
-import { Runtime, RuntimeBuilder } from "./runtime";
+import { getBinaryenType, Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
 
 class Context {
@@ -152,7 +152,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       return;
     }
 
-    const wasmType = this.getBinaryenType(entry.type);
+    const wasmType = getBinaryenType(entry.type);
 
     switch(entry.level) {
       case VariableLevel.UPPER: return this.addUpperVar(entry, wasmType);
@@ -274,7 +274,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
     subroutine.body.accept(this);
 
-    const returnType = this.getBinaryenType(returnVar.type);
+    const returnType = getBinaryenType(returnVar.type);
     this.currentBlock.push(this.runtime.popFrame());
 
     if (isFunction) {
@@ -286,7 +286,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     const body = this.endBlock("", false, returnType);
 
     let params = binaryen.none;
-    const paramlist = subroutine.params.map((param) => this.getBinaryenType(param.type));
+    const paramlist = subroutine.params.map((param) => getBinaryenType(param.type));
     if (paramlist.length > 0) {
       params = binaryen.createType(paramlist);
     }
@@ -306,16 +306,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   private context(): Context {
     return this.currentContext as Context;
-  }
-
-  private getBinaryenType(type: PascalType) {
-    switch(type) {
-      case BaseType.Real: return binaryen.f64;
-      case BaseType.Void: return binaryen.none;
-      default:
-        // int, char, boolean, and pointers are all i32
-        return binaryen.i32;
-    }
   }
 
   private isLocallyUsed(variable: VariableEntry): boolean {
@@ -624,7 +614,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       return this.wasm.memory.copy(address, sourceExpr, this.wasm.i32.const(sourceType.bytesize));
     }
 
-    const wasmType = this.getBinaryenType(sourceType);
+    const wasmType = getBinaryenType(sourceType);
     const size = sizeOf(sourceType)
     return this.storeValue(address, sourceExpr, wasmType, size);
   }
@@ -650,7 +640,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       case VariableLevel.UPPER: {
         const address = this.resolveUpperVariable(entry);
 
-        const wasmType = this.getBinaryenType(entry.type);
+        const wasmType = getBinaryenType(entry.type);
         const size = sizeOf(entry.type)
         return this.storeValue(address, exprInstr, wasmType, size);
       }
@@ -743,11 +733,16 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   visitCall(expr: Expr.Call): number {
     const subroutine = expr.callee;
-    const returnType = this.getBinaryenType(subroutine.returnVar.type);
+    const returnType = getBinaryenType(subroutine.returnVar.type);
     const args = expr.args.map((arg) => arg.accept(this));
 
     let callInstr = this.wasm.call(subroutine.absoluteName, args, returnType);
     return callInstr;
+  }
+
+  visitCallLib(expr: Expr.CallLib): number {
+    const args = expr.args.map((arg) => arg.accept(this));
+    return this.runtime.callLibrary(expr.callee, args);
   }
 
   visitVariable(expr: Expr.Variable): number {
@@ -756,7 +751,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   getVariableValue(entry: VariableEntry): number {
-    const wasmType = this.getBinaryenType(entry.type);
+    const wasmType = getBinaryenType(entry.type);
 
     switch(entry.level) {
       case VariableLevel.LOCAL: {
@@ -779,7 +774,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
 
     const type = expr.type as PascalType;
-    const wasmType = this.getBinaryenType(type);
+    const wasmType = getBinaryenType(type);
     const size = sizeOf(type);
 
     return this.loadValue(address, wasmType, size);

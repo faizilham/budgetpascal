@@ -142,7 +142,7 @@ export function isPointer(type?: PascalType): type is Pointer {
   return type != null && (type as Pointer).source != null;
 }
 
-type TypeCheckFunc = (type?: PascalType) => boolean;
+export type TypeCheckFunc = (type?: PascalType) => boolean;
 
 export function isPointerTo(ptrType?: PascalType, testType?: PascalType | TypeCheckFunc): boolean {
   if (!isPointer(ptrType)) return false;

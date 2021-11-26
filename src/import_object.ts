@@ -28,6 +28,12 @@ export function createImports(runner: Runner): Object {
     linebuffer += decoder.decode(result);
   }
 
+  const getString = (addr: number): string => {
+    const start = addr + 1;
+    const end = start + runner.memory[addr];
+    return decoder.decode(runner.memory.slice(start, end));
+  }
+
   const importObject = {
     io: {
       $putint: (n: number, mode: number) => {
@@ -41,11 +47,7 @@ export function createImports(runner: Runner): Object {
       $putreal: (x: number) => { runner.sendCommand("write", x.toExponential()); },
       $putln: () => { runner.sendCommand("write", "\n"); },
       $putstr: (addr: number) => {
-        const start = addr + 1;
-        const end = start + runner.memory[addr];
-        const str = decoder.decode(runner.memory.slice(start, end));
-
-        runner.sendCommand("write", str);
+        runner.sendCommand("write", getString(addr));
       },
 
       $readint: () => {
@@ -121,6 +123,14 @@ export function createImports(runner: Runner): Object {
         if (newline >= 0) {
           linebuffer = linebuffer.slice(newline+1);
         }
+      }
+    },
+
+    rtl: {
+      $pos: (substrAddr: number, sourceAddr: number): number => {
+        const substr = getString(substrAddr);
+        const source = getString(sourceAddr);
+        return source.indexOf(substr) + 1;
       }
     }
   };

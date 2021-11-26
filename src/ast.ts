@@ -1,5 +1,6 @@
 import { UnreachableErr } from "./errors";
 import { Subroutine, VariableEntry } from "./routine";
+import { LibraryFunction } from "./runtime";
 import { Token } from "./scanner";
 import { ARRAY_HEADER_SIZE, BaseType, getTypeName, isArrayType, isBaseType, isPointer, isString, PascalType, Pointer, sizeOf, StringType } from "./types";
 
@@ -30,6 +31,28 @@ export namespace Expr {
 
     public accept<T>(visitor: Visitor<T>): T {
       return visitor.visitCall(this);
+    }
+  }
+
+  export class CallLib extends Expr {
+    constructor(public callee: LibraryFunction, public args: Expr[]) {
+      super();
+      this.type = callee.returnType;
+      let stackNeutral = isBaseType(this.type);
+      if (stackNeutral) {
+        for (const arg of args) {
+          if (!arg.stackNeutral) {
+            stackNeutral = false;
+            break;
+          }
+        }
+      }
+
+      this.stackNeutral = stackNeutral;
+    }
+
+    public accept<T>(visitor: Visitor<T>): T {
+      return visitor.visitCallLib(this);
     }
   }
 
@@ -219,6 +242,7 @@ export namespace Expr {
 
   export interface Visitor<T> {
     visitCall(expr: Call): T;
+    visitCallLib(expr: CallLib): T;
     visitUnary(expr: Unary): T;
     visitBinary(expr: Binary): T;
     visitField(expr: Field): T;
@@ -243,7 +267,7 @@ export abstract class Stmt {
 
 export namespace Stmt {
   export class CallStmt extends Stmt {
-    constructor(public callExpr: Expr.Call, public tempVar: VariableEntry) {
+    constructor(public callExpr: Expr.Call | Expr.CallLib, public tempVar: VariableEntry) {
       super();
     }
     public accept<T>(visitor: Visitor<T>): T {

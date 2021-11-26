@@ -1,5 +1,5 @@
 import { Stmt } from "./ast";
-import { BaseType, isTypeEqual, PascalType, StringType} from "./types";
+import { BaseType, isTypeEqual, PascalType, StringType, TypeCheckFunc} from "./types";
 import { Token } from "./scanner";
 
 export abstract class Routine {
