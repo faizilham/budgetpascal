@@ -24,7 +24,7 @@ export enum TokenTag {
   IDENTIFIER, STRING, CHAR, INTEGER, REAL, TRUE, FALSE,
 
   // Keywords
-  ARRAY, BEGIN, BREAK, CONTINUE, CASE, CONST, DO, DOWNTO, ELSE, END, FOR,
+  ARRAY, BEGIN, BREAK, CONTINUE, CASE, CONST, DO, DOWNTO, ELSE, END, FILE, FOR,
   FUNCTION, FORWARD, IF, OF, PROCEDURE, PROGRAM, RECORD, REPEAT, THEN, TO,
   TYPE, STRING_TYPE, UNTIL, VAR, WHILE, READ, READLN, WRITE, WRITELN
 }
@@ -84,6 +84,7 @@ const KeywordTokens : {[key: string]: TokenTag} = {
   "else": TokenTag.ELSE,
   "end": TokenTag.END,
   "false": TokenTag.FALSE,
+  "file": TokenTag.FILE,
   "for": TokenTag.FOR,
   "function": TokenTag.FUNCTION,
   "forward": TokenTag.FORWARD,

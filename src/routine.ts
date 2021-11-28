@@ -1,5 +1,5 @@
 import { Stmt } from "./ast";
-import { BaseType, isTypeEqual, PascalType, StringType, TypeCheckFunc} from "./types";
+import { BaseType, FileType, isTypeEqual, PascalType, StringType } from "./types";
 import { Token } from "./scanner";
 
 export abstract class Routine {
@@ -144,7 +144,8 @@ export class IdentifierTable {
       "boolean": {entryType: IdentifierType.TypeDef, type: BaseType.Boolean},
       "char": {entryType: IdentifierType.TypeDef, type: BaseType.Char},
       "real": {entryType: IdentifierType.TypeDef, type: BaseType.Real},
-      "string": {entryType: IdentifierType.TypeDef, type: StringType.create()}
+      "string": {entryType: IdentifierType.TypeDef, type: StringType.default},
+      "text": {entryType: IdentifierType.TypeDef, type: FileType.textFile}
     };
 
     this.tempVars = [];

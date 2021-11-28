@@ -438,48 +438,58 @@ export class RuntimeBuilder {
   /* IO */
 
   putInt(operand: number, mode: number, spacing: number): number {
-    this.importsUsed.add("io.$putint");
-    return this.wasm.call("io.$putint", [operand, this.wasm.i32.const(mode), spacing], binaryen.none);
+    this.importsUsed.add("rtl.$putint");
+    return this.wasm.call("rtl.$putint", [operand, this.wasm.i32.const(mode), spacing], binaryen.none);
   }
 
   putReal(operand: number, spacing: number, decimal: number): number {
-    this.importsUsed.add("io.$putreal");
-    return this.wasm.call("io.$putreal", [operand, spacing, decimal], binaryen.none);
+    this.importsUsed.add("rtl.$putreal");
+    return this.wasm.call("rtl.$putreal", [operand, spacing, decimal], binaryen.none);
   }
 
   putStr(addr: number, spacing: number): number {
-    this.importsUsed.add("io.$putstr");
-    return this.wasm.call("io.$putstr", [addr, spacing], binaryen.none);
+    this.importsUsed.add("rtl.$putstr");
+    return this.wasm.call("rtl.$putstr", [addr, spacing], binaryen.none);
   }
 
   putLn(): number {
-    this.importsUsed.add("io.$putln");
-    return this.wasm.call("io.$putln", [], binaryen.none);
+    this.importsUsed.add("rtl.$putln");
+    return this.wasm.call("rtl.$putln", [], binaryen.none);
   }
 
   readInt(): number {
-    this.importsUsed.add("io.$readint");
-    return this.wasm.call("io.$readint", [], binaryen.i32);
+    this.importsUsed.add("rtl.$readint");
+    return this.wasm.call("rtl.$readint", [], binaryen.i32);
   }
 
   readChar(): number {
-    this.importsUsed.add("io.$readchar");
-    return this.wasm.call("io.$readchar", [], binaryen.i32);
+    this.importsUsed.add("rtl.$readchar");
+    return this.wasm.call("rtl.$readchar", [], binaryen.i32);
   }
 
   readReal(): number {
-    this.importsUsed.add("io.$readreal");
-    return this.wasm.call("io.$readreal", [], binaryen.f64);
+    this.importsUsed.add("rtl.$readreal");
+    return this.wasm.call("rtl.$readreal", [], binaryen.f64);
   }
 
   readStr(addr: number, maxSize: number): number {
-    this.importsUsed.add("io.$readstr");
-    return this.wasm.call("io.$readstr", [addr, this.wasm.i32.const(maxSize)], binaryen.none);
+    this.importsUsed.add("rtl.$readstr");
+    return this.wasm.call("rtl.$readstr", [addr, this.wasm.i32.const(maxSize)], binaryen.none);
   }
 
   readLn(): number {
-    this.importsUsed.add("io.$readln");
-    return this.wasm.call("io.$readln", [], binaryen.none);
+    this.importsUsed.add("rtl.$readln");
+    return this.wasm.call("rtl.$readln", [], binaryen.none);
+  }
+
+  setfile(id: number): number {
+    this.importsUsed.add("rtl.$fset");
+    return this.wasm.call("rtl.$fset", [id], binaryen.none);
+  }
+
+  unsetFile(): number {
+    this.importsUsed.add("rtl.$funset");
+    return this.wasm.call("rtl.$funset", [], binaryen.none);
   }
 
   /* Libraries */
@@ -543,31 +553,58 @@ export namespace Runtime {
 }
 
 const importFunctions: {[key: string]: [number, number]} = {
-  "io.$putint": [params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.none],
-  "io.$putreal": [params(binaryen.f64, binaryen.i32, binaryen.i32), binaryen.none],
-  "io.$putln": [binaryen.none, binaryen.none],
-  "io.$putstr": [ params(binaryen.i32, binaryen.i32), binaryen.none],
+  "rtl.$putint": [params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.none],
+  "rtl.$putreal": [params(binaryen.f64, binaryen.i32, binaryen.i32), binaryen.none],
+  "rtl.$putln": [binaryen.none, binaryen.none],
+  "rtl.$putstr": [ params(binaryen.i32, binaryen.i32), binaryen.none],
 
-  "io.$readint": [binaryen.none, binaryen.i32],
-  "io.$readchar": [binaryen.none, binaryen.i32],
-  "io.$readreal": [binaryen.none, binaryen.f64],
-  "io.$readstr": [params(binaryen.i32, binaryen.i32), binaryen.none],
-  "io.$readln": [binaryen.none, binaryen.none],
+  "rtl.$readint": [binaryen.none, binaryen.i32],
+  "rtl.$readchar": [binaryen.none, binaryen.i32],
+  "rtl.$readreal": [binaryen.none, binaryen.f64],
+  "rtl.$readstr": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "rtl.$readln": [binaryen.none, binaryen.none],
+
+  // files
+  "rtl.$fset": [binaryen.i32, binaryen.none],
+  "rtl.$funset": [binaryen.none, binaryen.none],
+
+  "rtl.$assign": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "rtl.$reset": [binaryen.i32, binaryen.none],
+  "rtl.$rewrite": [binaryen.i32, binaryen.none],
+  "rtl.$close": [binaryen.i32, binaryen.none],
+  "rtl.$eof": [binaryen.i32, binaryen.i32],
 
   /* rtl */
-  "rtl.$pos": [params(binaryen.i32, binaryen.i32), binaryen.i32]
+  "rtl.$pos": [params(binaryen.i32, binaryen.i32), binaryen.i32],
 };
 
 function rtl(): Runtime.Library {
   return {
     "length": [
-      new LibraryFunction("rtl.$lenstr", Types.BaseType.Integer, [Types.StringType.create()], lenstr),
+      new LibraryFunction("rtl.$lenstr", Types.BaseType.Integer, [Types.StringType.default], lenstr),
       new LibraryFunction("rtl.$lenarr", Types.BaseType.Integer, [Types.isArrayType], lenarr),
     ],
     "pos": [
-      new LibraryFunction("rtl.$posc", Types.BaseType.Integer, [Types.BaseType.Char, Types.StringType.create()], posc),
-      new LibraryFunction("rtl.$pos", Types.BaseType.Integer, [Types.StringType.create(), Types.StringType.create()], null),
-    ]
+      new LibraryFunction("rtl.$posc", Types.BaseType.Integer, [Types.BaseType.Char, Types.StringType.default], posc),
+      new LibraryFunction("rtl.$pos", Types.BaseType.Integer, [Types.StringType.default, Types.StringType.default], null),
+    ],
+
+    // files
+    "assign":[
+      new LibraryFunction("rtl.$assign", Types.BaseType.Void, [Types.isFile, Types.StringType.default], null)
+    ],
+    "reset":[
+      new LibraryFunction("rtl.$reset", Types.BaseType.Void, [Types.isFile], null)
+    ],
+    "rewrite":[
+      new LibraryFunction("rtl.$rewrite", Types.BaseType.Void, [Types.isFile], null)
+    ],
+    "close":[
+      new LibraryFunction("rtl.$close", Types.BaseType.Void, [Types.isFile], null)
+    ],
+    "eof":[
+      new LibraryFunction("rtl.$eof", Types.BaseType.Boolean, [Types.isFile], null)
+    ],
   }
 }
 

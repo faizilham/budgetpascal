@@ -1,8 +1,10 @@
 import { compile } from "../src/";
 import fs from "fs";
+import fsPromise from "fs/promises";
 import readline from "readline";
 import { Worker } from "worker_threads";
-import { RuntimeError } from "../src/import_object";
+import { FileHandler } from "../src/file_handler";
+import path from "path";
 
 let debugWasm = false;
 let optimize = true;
@@ -59,10 +61,12 @@ function runFile(filename) {
     waitingForLine = false;
     let input = linebuffers.shift();
 
-    Atomics.store(iobuffer, 0, input.length);
+    iobuffer[1] = input.length;
     for (let i = 0; i < input.length; i++) {
-      iobuffer[i + 1] = input.charCodeAt(i);
+      iobuffer[i + 2] = input.charCodeAt(i);
     }
+
+    Atomics.store(iobuffer, 0, 1);
     Atomics.notify(iobuffer, 0, 1);
   }
 
@@ -75,11 +79,47 @@ function runFile(filename) {
     }
   });
 
+  const fileRead = async (filename) => {
+    try {
+      const data = await fsPromise.readFile(filename);
+      return new Uint8Array(data);
+    } catch(e) {
+      return null;
+    }
+  }
+
+  const runDir = process.cwd();
+
+  const fileWrite = async (filename, data) => {
+    try {
+      await fsPromise.writeFile(path.join(runDir, filename), data);
+      return true;
+    } catch (e) {
+      console.error(e.message);
+      return false;
+    }
+  }
+
+  const filehandler = new FileHandler(iobuffer, fileRead, fileWrite);
+
+  const notifyResult = (result) => {
+    Atomics.store(iobuffer, 0, result);
+    Atomics.notify(iobuffer, 0, 1);
+  }
+
   process.chdir(__dirname);
   const worker = new Worker("./runner.js", {workerData: {iobuffer, wasmModule}});
   worker.on("message", (message) => {
     switch(message?.command) {
-      case "write": process.stdout.write(message.data); break;
+      case "write": {
+        if (message.data.fileId == null) {
+          process.stdout.write(message.data.value);
+        } else {
+          filehandler.writebyte(message.data.fileId, message.data.value)
+            .then(notifyResult);
+        }
+        break;
+      }
       case "read": {
         if (inputPaused) {
           inputPaused = false;
@@ -87,6 +127,21 @@ function runFile(filename) {
         }
 
         notifyRead();
+        break;
+      }
+
+      case "assignFile": {
+        filehandler.assign(message.data.id, message.data.filename);
+        break;
+      }
+
+      case "rewriteFile": {
+        filehandler.rewrite(message.data.id).then(notifyResult);
+        break;
+      }
+
+      case "closeFile": {
+        filehandler.close(message.data.id).then(notifyResult);
         break;
       }
     }

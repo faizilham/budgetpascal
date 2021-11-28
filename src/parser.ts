@@ -1,6 +1,6 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
 import { Expr, Stmt, WriteFormat } from "./ast";
-import { ArrayType, BaseType, getTypeName, isBool, isMemoryType, isNumberType, isOrdinal, isPointer, isPointerTo, isRecord, isString, isStringLike, isTypeEqual, PascalType, Pointer, RecordType, StringType } from "./types"
+import { ArrayType, BaseType, FileType, getTypeName, isBaseType, isBool, isFile, isFileOf, isMemoryType, isNumberType, isOrdinal, isPointer, isPointerTo, isRecord, isString, isStringLike, isTextFile, isTypeEqual, PascalType, Pointer, RecordType, StringType } from "./types"
 import { IdentifierType, ParamType, Program, Routine, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 import { LibraryFunction, Runtime } from "./runtime";
@@ -163,8 +163,10 @@ export class Parser {
   }
 
   private typeName(identiferOnly = false): PascalType {
-    this.consumeAny([TokenTag.IDENTIFIER, TokenTag.STRING_TYPE, TokenTag.ARRAY, TokenTag.RECORD],
-      "Expect type name.");
+    const allowedTokens = [TokenTag.IDENTIFIER, TokenTag.STRING_TYPE,
+      TokenTag.ARRAY, TokenTag.RECORD, TokenTag.FILE];
+
+    this.consumeAny(allowedTokens, "Expect type name.");
     const typeName = this.previous;
 
     let type: PascalType | null = null;
@@ -173,12 +175,17 @@ export class Parser {
         case TokenTag.STRING_TYPE: type = this.stringType(); break;
         case TokenTag.ARRAY: type = this.arrayType(); break;
         case TokenTag.RECORD: type = this.recordType(); break;
+        case TokenTag.FILE: type = this.fileType(); break;
       }
     }
 
     if (type == null) {
       type = this.currentRoutine.findType(typeName.lexeme);
       if (type == null) {
+        if (typeName.tag !== TokenTag.IDENTIFIER) {
+          throw this.errorAt(typeName, "Expect type identifier.");
+        }
+
         throw this.errorAt(typeName, `Unknown type '${typeName.lexeme}'.`);
       }
     }
@@ -266,6 +273,18 @@ export class Parser {
     this.consume(TokenTag.END, "Expect 'end' after record fields.");
 
     return record;
+  }
+
+  private fileType(): FileType {
+    this.consume(TokenTag.OF, "Expect 'of'.");
+    const start = this.current;
+    const entryType = this.typeName(true);
+
+    if (!isBaseType(entryType) && !isMemoryType(entryType)) {
+      throw this.errorAt(start, "Invalid file type");
+    }
+
+    return new FileType(entryType, false);
   }
 
   private synchronizeVarConst() {
@@ -818,14 +837,35 @@ export class Parser {
     const outputs: Expr[] = [];
     const formats: WriteFormat[] = [];
 
+    let outputFile: Expr | undefined;
+    let fileType: FileType | undefined;
+
     if (this.match(TokenTag.LEFT_PAREN)) {
       if (!this.check(TokenTag.RIGHT_PAREN)) {
+        let first = true;
         do {
           const exprStart = this.current;
           const expr = this.expression();
 
-          if (!this.isPrintable(expr.type)) {
-            throw this.errorAt(exprStart, `Can't write type ${getTypeName(expr.type)} to console`);
+          if (first && isFile(expr.type)) {
+            outputFile = expr;
+            fileType = expr.type;
+            first = false;
+            continue;
+          }
+
+          first = false;
+
+          if (isFile(fileType)) {
+            if (isTextFile(fileType)) {
+              if (!this.isPrintable(expr.type)) {
+                throw this.errorAt(exprStart, `Can't write type ${getTypeName(expr.type)} to text file.`);
+              }
+            } else if (!isFileOf(fileType, expr.type)) {
+              throw this.errorAt(exprStart, `Mismatched types, expected ${getTypeName(fileType.entryType)} got ${getTypeName(expr.type)}.`);
+            }
+          } else if (!this.isPrintable(expr.type)) {
+            throw this.errorAt(exprStart, `Can't write type ${getTypeName(expr.type)} to console.`);
           }
 
           let format = this.writeFormat(expr.type);
@@ -838,7 +878,7 @@ export class Parser {
       this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after expression.");
     }
 
-    return new Stmt.Write(outputs, newline, formats);
+    return new Stmt.Write(outputs, newline, formats, outputFile);
   }
 
   private writeFormat(printType?: PascalType): WriteFormat {
@@ -919,6 +959,10 @@ export class Parser {
   private assignment(left: Expr, modifier?: Token): Stmt {
     if (!left.assignable) {
       throw this.errorAtCurrent("Expect assignable variable, array element or record field.");
+    }
+
+    if (isFile(left.type)) {
+      throw this.errorAtCurrent("File is not assignable.");
     }
 
     const operator = this.advance();

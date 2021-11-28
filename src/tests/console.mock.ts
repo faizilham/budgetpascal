@@ -20,7 +20,7 @@ export class MockConsole {
     let currentline: string[] = [];
     const lines = this.lines;
     return {
-      io: {
+      rtl: {
         $putint: (n: number, mode: number) => {
           switch(mode) {
             case 1: currentline.push(String.fromCharCode(n)); break;

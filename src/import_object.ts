@@ -1,3 +1,5 @@
+import { FileHandlerStatus } from "./file_handler";
+
 type SendCommand = (command: string, data?: any) => void;
 interface Runner {
   iobuffer: Int32Array,
@@ -15,22 +17,36 @@ export class RuntimeError extends Error {
 export function createImports(runner: Runner): Object {
   let linebuffer = "";
   const decoder = new TextDecoder();
+  let currentFile = -1;
 
   const requestReadline = () => {
     Atomics.store(runner.iobuffer, 0, 0);
     runner.sendCommand("read");
     Atomics.wait(runner.iobuffer, 0, 0);
 
-    const length = Atomics.load(runner.iobuffer, 0);
+    const length = runner.iobuffer[1];
     if (length === 0) return;
     else if (length < 0) throw new InterruptRuntime();
 
     const result = new Uint8Array(length);
     for (let i = 0; i < length; i++) {
-      result[i] = runner.iobuffer[i+1];
+      result[i] = runner.iobuffer[i+2];
     }
 
     linebuffer += decoder.decode(result);
+  }
+
+  const sendFileCommand = (command: string, data?: any) => {
+    Atomics.store(runner.iobuffer, 0, 0);
+    runner.sendCommand(command, data);
+    Atomics.wait(runner.iobuffer, 0, 0);
+    const result = Atomics.load(runner.iobuffer, 0) as FileHandlerStatus;
+
+    if (result === FileHandlerStatus.OK) {
+      return;
+    }
+
+    throw new RuntimeError(FileHandlerErrors[result]);
   }
 
   const getString = (addr: number): string => {
@@ -46,8 +62,18 @@ export function createImports(runner: Runner): Object {
     return ' '.repeat(padSize) + str;
   }
 
+  const sendWrite = (value: string) => {
+    const data: any = { value };
+    if (currentFile < 0) {
+      runner.sendCommand("write", data);
+    } else {
+      data.fileId = currentFile;
+      sendFileCommand("write", data);
+    }
+  }
+
   const importObject = {
-    io: {
+    rtl: {
       $putint: (n: number, mode: number, spacing: number) => {
         let str;
         switch(mode) {
@@ -57,18 +83,18 @@ export function createImports(runner: Runner): Object {
             str = n.toString();
         }
 
-        runner.sendCommand("write", padded(str, spacing));
+        sendWrite(padded(str, spacing));
       },
       $putreal: (x: number, spacing: number, decimal: number) => {
         let str = decimal < 0 ?
           x.toExponential() :
           x.toFixed(decimal);
 
-        runner.sendCommand("write", padded(str, spacing));
+        sendWrite(padded(str, spacing));
       },
-      $putln: () => { runner.sendCommand("write", "\n"); },
+      $putln: () => { sendWrite("\n"); },
       $putstr: (addr: number, spacing: number) => {
-        runner.sendCommand("write", padded(getString(addr), spacing));
+        sendWrite(padded(getString(addr), spacing));
       },
 
       $readint: () => {
@@ -150,10 +176,42 @@ export function createImports(runner: Runner): Object {
         if (newline >= 0) {
           linebuffer = linebuffer.slice(newline+1);
         }
-      }
-    },
+      },
 
-    rtl: {
+      /* Files */
+
+      $fset: (id: number) => {
+        currentFile = id;
+      },
+
+      $funset: () => {
+        currentFile = -1;
+      },
+
+      $assign: (id: number, nameAddr: number) => {
+        const filename = getString(nameAddr);
+        runner.sendCommand("assignFile", {id, filename});
+      },
+
+      $reset: (id: number) => {
+        // TODO:
+      },
+
+      $rewrite: (id: number) => {
+        sendFileCommand("rewriteFile", {id});
+      },
+
+      $close: (id: number) => {
+        sendFileCommand("closeFile", {id});
+        // TODO:
+      },
+
+      $eof: (id: number): boolean => {
+        // TODO:
+
+        return false;
+      },
+
       $pos: (substrAddr: number, sourceAddr: number): number => {
         const substr = getString(substrAddr);
         const source = getString(sourceAddr);
@@ -177,4 +235,14 @@ function getNonSpace(str: string): [string, string] {
   if (!match) return ["", str];
 
   return [match[0], str.slice(match[0].length)];
+}
+
+const FileHandlerErrors = {
+  [FileHandlerStatus.NOT_FOUND]: "File not found.",
+  [FileHandlerStatus.CLOSED]: "File is closed.",
+  [FileHandlerStatus.ALREADY_OPENED]: "File already opened.",
+  [FileHandlerStatus.NOT_ASSIGNED]: "File is not yet opened.",
+  [FileHandlerStatus.READONLY]: "File is in read-only mode.",
+  [FileHandlerStatus.WRITEONLY]: "File is in write-only mode.",
+  [FileHandlerStatus.WRITE_ERROR]: "Error when writing file.",
 }

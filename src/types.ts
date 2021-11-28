@@ -1,6 +1,8 @@
+import { UnreachableErr } from "./errors";
+
 export const ARRAY_HEADER_SIZE = 4;
 
-export type PascalType = BaseType | MemoryType | Pointer;
+export type PascalType = BaseType | MemoryType | Pointer | FileType;
 
 export enum BaseType {
   Void,
@@ -22,6 +24,8 @@ export class StringType implements MemoryType {
   }
 
   private static sizes: {[key: number]: StringType} = {};
+
+  static default: StringType = new StringType(255);
 
   static create(size: number = 255): StringType {
     let strtype = StringType.sizes[size];
@@ -98,6 +102,15 @@ export class Pointer {
   constructor(public source: PascalType) {}
 }
 
+export class FileType {
+  entrySize: number
+  constructor(public entryType: BaseType | MemoryType, public isText = false) {
+    this.entrySize = isText ? 0 : sizeOf(entryType);
+  }
+
+  static textFile = new FileType(BaseType.Void, true);
+}
+
 export function isBaseType(type?: PascalType): type is BaseType {
   return !isNaN(type as any);
 }
@@ -142,6 +155,18 @@ export function isPointer(type?: PascalType): type is Pointer {
   return type != null && (type as Pointer).source != null;
 }
 
+export function isFile(type?: PascalType): type is FileType {
+  return type != null && type instanceof FileType;
+}
+
+export function isTextFile(type?: PascalType): boolean {
+  return isFile(type) && type.isText;
+}
+
+export function isFileOf(filetype?: PascalType, type?: PascalType): boolean {
+  return isFile(filetype) && isTypeEqual(type);
+}
+
 export type TypeCheckFunc = (type?: PascalType) => boolean;
 
 export function isPointerTo(ptrType?: PascalType, testType?: PascalType | TypeCheckFunc): boolean {
@@ -169,6 +194,7 @@ export function getTypeName(type?: PascalType): string {
   if (type == null || type === BaseType.Void) return "untyped";
   else if (isBaseType(type)) return BaseType[type];
   else if (isMemoryType(type)) return type.typename();
+  else if (isFile(type)) return 'File';
   return `Unknown`;
 }
 

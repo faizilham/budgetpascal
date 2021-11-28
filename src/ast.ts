@@ -2,7 +2,7 @@ import { UnreachableErr } from "./errors";
 import { Subroutine, VariableEntry } from "./routine";
 import { LibraryFunction } from "./runtime";
 import { Token } from "./scanner";
-import { ARRAY_HEADER_SIZE, BaseType, getTypeName, isArrayType, isBaseType, isPointer, isString, PascalType, Pointer, sizeOf, StringType } from "./types";
+import { ARRAY_HEADER_SIZE, BaseType, FileType, getTypeName, isArrayType, isBaseType, isPointer, isString, PascalType, Pointer, sizeOf, StringType } from "./types";
 
 export abstract class Expr {
   assignable: boolean = false;
@@ -379,7 +379,7 @@ export namespace Stmt {
   }
 
   export class Write extends Stmt {
-    constructor(public outputs: Expr[], public newline: boolean, public formats: WriteFormat[]) {
+    constructor(public outputs: Expr[], public newline: boolean, public formats: WriteFormat[], public outputFile?: Expr) {
       super();
     }
     public accept<T>(visitor: Visitor<T>): T {

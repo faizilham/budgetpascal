@@ -1,7 +1,7 @@
 import binaryen, { MemorySegment } from "binaryen";
 import { UnreachableErr } from "./errors";
 import { Expr, Stmt } from "./ast";
-import { BaseType, getTypeName, isArrayType, isBool, isMemoryType, isOrdinal, isPointer, isPointerTo, isString, MemoryType, PascalType, Pointer, sizeOf, StringType } from "./types"
+import { BaseType, getTypeName, isArrayType, isBool, isFile, isMemoryType, isOrdinal, isPointer, isPointerTo, isString, isTextFile, MemoryType, PascalType, Pointer, sizeOf, StringType } from "./types"
 import { Program, Routine, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { getBinaryenType, Runtime, RuntimeBuilder } from "./runtime";
 import { TokenTag } from "./scanner";
@@ -32,6 +32,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   private labelCount: number;
   private stringAddresses: number[];
   private runtime: RuntimeBuilder;
+  private fileId: number;
 
   constructor(private program: Program) {
     this.wasm = new binaryen.Module();
@@ -42,6 +43,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     this.labelCount = 0;
     this.stringAddresses = [];
     this.runtime = new RuntimeBuilder(this.wasm);
+    this.fileId = 0;
   }
 
   emit(optimize: boolean = true): Uint8Array {
@@ -162,6 +164,13 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
           if (!entry.paramVar) {
             ctx.locals.push(wasmType);
+
+            if (isFile(entry.type)) {
+              const id = this.fileId++;
+              this.currentBlock.push(
+                this.wasm.local.set(entry.index, this.wasm.i32.const(id))
+              );
+            }
           }
         break;
       }
@@ -185,11 +194,17 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
 
     const size = sizeOf(variable.type);
-    const value = this.wasm.local.get(variable.index, wasmType);
+    const address = this.runtime.stackTop();
 
     if (variable.paramVar) {
       // store argument to memory
-      const address = this.runtime.stackTop();
+      const value = this.wasm.local.get(variable.index, wasmType);
+      this.currentBlock.push(
+        this.storeValue(address, value, wasmType, size)
+      );
+    } else if (isFile(variable.type)) {
+      const id = this.fileId++;
+      const value = this.wasm.i32.const(id);
       this.currentBlock.push(
         this.storeValue(address, value, wasmType, size)
       );
@@ -674,6 +689,16 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   visitWrite(stmt: Stmt.Write) {
+    if (stmt.outputFile) {
+      if (isTextFile(stmt.outputFile.type)) {
+        const file = this.visitAndPreserveStack(stmt.outputFile);
+        this.currentBlock.push(this.runtime.setfile(file));
+      } else {
+        this.writeFileBinary(stmt);
+        return;
+      }
+    }
+
     for (let i = 0; i < stmt.outputs.length; i++) {
       const output = stmt.outputs[i];
       const format = stmt.formats[i];
@@ -712,6 +737,14 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     if (stmt.newline) {
       this.currentBlock.push(this.runtime.putLn());
     }
+
+    if (stmt.outputFile) {
+      this.currentBlock.push(this.runtime.unsetFile());
+    }
+  }
+
+  private writeFileBinary(stmt: Stmt.Write) {
+    //TODO:
   }
 
   private addLoop() {

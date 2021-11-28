@@ -67,7 +67,7 @@ export class TerminalUI {
       const msg = event.data;
 
       switch(msg?.command) {
-        case "write": this.write(msg.data); break;
+        case "write": this.write(msg.data.value); break;
         case "read": {
           this.readToBuffer(iobuffer);
           break;
@@ -88,17 +88,18 @@ export class TerminalUI {
     this.showCursor(false);
 
     if (input == null) {
-      Atomics.store(iobuffer, 0, -1);
+      iobuffer[1] = -1;
     } else {
       input += "\n";
       const length = input.length;
+      iobuffer[1] = length;
 
-      Atomics.store(iobuffer, 0, length);
       for (let i = 0; i < length; i++) {
-        iobuffer[i + 1] = input.charCodeAt(i);
+        iobuffer[i + 2] = input.charCodeAt(i);
       }
     }
 
+    Atomics.store(iobuffer, 0, 1);
     Atomics.notify(iobuffer, 0, 1);
   }
 }
