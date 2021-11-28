@@ -741,7 +741,6 @@ export class Parser {
           const readType = expr.type;
           expr = this.removeDeref(expr);
 
-          // TODO: handle array & record member
           if (!expr.assignable || (!isPointer(expr.type) && !(expr instanceof Expr.Variable))) {
             throw this.errorAt(exprStart, "Expect assignable variable, array element or record field.");
           }

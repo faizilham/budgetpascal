@@ -2,6 +2,7 @@ import { compile } from "../src/";
 import fs from "fs";
 import readline from "readline";
 import { Worker } from "worker_threads";
+import { RuntimeError } from "../src/import_object";
 
 let debugWasm = false;
 let optimize = true;
@@ -91,8 +92,16 @@ function runFile(filename) {
     }
   });
 
-  worker.on("error", err => console.error(err));
+  worker.on("error", (err) => {
+    if (err.message.startsWith("Runtime error:")) {
+      console.error(err.message);
+    } else {
+      console.error(err);
+    }
+  });
+
   worker.on("exit", exitcode => {
     rl.close();
+    if (exitcode !== 0) process.exit(exitcode);
   });
 }

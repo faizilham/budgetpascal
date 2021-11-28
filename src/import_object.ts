@@ -6,6 +6,11 @@ interface Runner {
 }
 
 export class InterruptRuntime extends Error {}
+export class RuntimeError extends Error {
+  constructor(message: string) {
+    super(`Runtime error: ${message}`);
+  }
+}
 
 export function createImports(runner: Runner): Object {
   let linebuffer = "";
@@ -74,7 +79,10 @@ export function createImports(runner: Runner): Object {
           if (str) {
             let parsed = parseInt(str, 10);
 
-            if (isNaN(parsed)) parsed = 0; // TODO: runtime err?
+            if (isNaN(parsed)) {
+              throw new RuntimeError("Invalid integer format");
+            }
+
             return parsed;
           } else {
             requestReadline();
@@ -100,7 +108,10 @@ export function createImports(runner: Runner): Object {
           if (str) {
             let parsed = parseFloat(str);
 
-            if (isNaN(parsed)) parsed = 0; // TODO: runtime err?
+            if (isNaN(parsed)) {
+              throw new RuntimeError("Invalid floating-point number format");
+            }
+
             return parsed;
           } else {
             requestReadline();

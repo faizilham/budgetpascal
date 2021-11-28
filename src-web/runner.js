@@ -1,4 +1,4 @@
-import {createImports, InterruptRuntime} from "../src/import_object";
+import {createImports, InterruptRuntime, RuntimeError} from "../src/import_object";
 
 const sendCommand = (command, data) => {
   self.postMessage({command, data});
@@ -20,6 +20,8 @@ function run(iobuffer, wasmModule) {
   } catch (e) {
     if (e instanceof InterruptRuntime) {
       sendCommand("write", "\nProgram interrupted.\n");
+    } else if (e instanceof RuntimeError) {
+      sendCommand("write", `\n${e.message}\n`);
     } else {
       console.error(e);
     }
