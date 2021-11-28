@@ -581,26 +581,21 @@ export class Parser {
   }
 
   private caseMatchCondition(tempVar: Expr.Variable): Expr {
-    const allowedValues = [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.TRUE, TokenTag.FALSE];
+    let startToken = this.current;
+    let startVal = this.expression();
 
-    this.consumeAny(allowedValues, "Expect ordinal literal value.");
-    let startToken = this.previous;
-    let startVal = this.literals(startToken);
+    if (!isOrdinal(startVal.type) || !(startVal instanceof Expr.Literal)) {
+      throw this.errorAt(startToken, `Expect ordinal literal or constant.`);
+    }
 
     if (!this.match(TokenTag.RANGE)) {
       const operator = new Token(TokenTag.EQUAL, "=", startToken.line, startToken.column);
       return this.binary(tempVar, operator, startVal)
     }
 
-    if (!isOrdinal(startVal.type)) {
-      throw this.errorAtPrevious("Invalid range expression.");
-    }
+    let endVal = this.expression();
 
-    this.consumeAny(allowedValues, "Expect literal value after '..'.");
-    let endToken = this.previous;
-    let endVal = this.literals(endToken);
-
-    if (!isTypeEqual(startVal.type, endVal.type)) {
+    if (!isTypeEqual(startVal.type, endVal.type) || !(endVal instanceof Expr.Literal)) {
       throw this.errorAtPrevious("Invalid range expression.");
     }
 
@@ -1218,16 +1213,18 @@ export class Parser {
   private inRange(left: Expr): Expr {
     this.consume(TokenTag.LEFT_SQUARE, "Expect '['.");
 
-    const allowedValues = [TokenTag.CHAR, TokenTag.INTEGER, TokenTag.TRUE, TokenTag.FALSE];
     const ranges: number[] = [];
 
     do {
-      this.consumeAny(allowedValues, "Expect ordinal literal value.");
-      const startToken = this.previous;
-      const startVal = this.literals(startToken);
+      const startToken = this.current;
+      const startVal = this.expression();
+
+      if (!isOrdinal(startVal.type) || !(startVal instanceof Expr.Literal)) {
+        throw this.errorAt(startToken, `Expect ordinal literal or constant.`);
+      }
 
       if (!isTypeEqual(left.type, startVal.type)) {
-        throw this.errorAtPrevious(`Invalid comparison between type ${getTypeName(left.type)} and ${getTypeName(startVal.type)}`);
+        throw this.errorAt(startToken, `Invalid comparison between type ${getTypeName(left.type)} and ${getTypeName(startVal.type)}`);
       }
 
       ranges.push(startVal.literal);
@@ -1237,12 +1234,11 @@ export class Parser {
         continue;
       }
 
-      this.consumeAny(allowedValues, "Expect ordinal literal value after '..'.");
-      const endToken = this.previous;
-      const endVal = this.literals(endToken);
+      const endToken = this.current;
+      const endVal = this.expression();
 
-      if (!isTypeEqual(startVal.type, endVal.type)) {
-        throw this.errorAtPrevious("Invalid range expression.");
+      if (!isTypeEqual(startVal.type, endVal.type) || !(endVal instanceof Expr.Literal)) {
+        throw this.errorAt(endToken, "Invalid range expression.");
       }
 
       ranges.push(endVal.literal);

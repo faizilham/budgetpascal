@@ -1,4 +1,11 @@
 program branching;
+
+const
+  nine = 9;
+  charA = 'a';
+  char102 = #102;
+  cent = 100;
+
 var
   a, i, j: integer;
   c: char;
@@ -59,8 +66,8 @@ begin
 
   c := #97;
   case c of
-    #97..#99: writeln(123);
-    #100..#102: writeln(456);
+    charA..#99: writeln(123);
+    #100..char102: writeln(456);
   end;
 
   case c of
@@ -114,7 +121,7 @@ begin
     writeln('excluded: ', c);
 
   a := 8;
-  if a in [88..100, 6, 9..12] then
+  if a in [88..cent, 6, nine..12] then
     writeln('included: ', a)
   else
     writeln('excluded: ', a);
