@@ -4,13 +4,17 @@ type
   int6 = array[1..6] of integer;
   matrix26 = array[1..2, 1..6] of integer;
 
+const
+  four = 4;
+  seven = 7;
+
 var
   arr, arr2: array[1..6] of integer;
   mat: array[1..2] of array[1..6] of integer;
   mat2: matrix26;
   i: integer;
   str: string[5];
-  arr3: array[4..7] of integer;
+  arr3: array[four..seven] of integer;
 
   procedure printArray(const arr: int6);
   var i: integer;

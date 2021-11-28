@@ -209,18 +209,29 @@ export class Parser {
     const dimensions: [number, number][] = [];
 
     do {
-      const startToken = this.consume(TokenTag.INTEGER, "Expect integer starting index.");
+      const startToken = this.current;
+      const start = this.expression();
+
+      if (start.type !== BaseType.Integer || !(start instanceof Expr.Literal)) {
+        throw this.errorAt(startToken, "Expect integer literal or constant");
+      }
+
+      const startIndex = start.literal;
+
       this.consume(TokenTag.RANGE, "Expect '..' after starting index.");
-      const endToken = this.consume(TokenTag.INTEGER, "Expect integer final index.");
 
-      const start = startToken.literal as number;
-      const end = endToken.literal as number;
+      const end = this.expression();
 
-      if (start >= end) {
+      if (end.type !== BaseType.Integer || !(end instanceof Expr.Literal)) {
+        throw this.errorAt(startToken, "Expect integer literal or constant");
+      }
+
+      const endIndex = end.literal;
+      if (startIndex >= endIndex) {
         throw this.errorAt(startToken, "Starting index must be smaller than final index.");
       }
 
-      dimensions.push([start, end]);
+      dimensions.push([startIndex, endIndex]);
     } while(!this.check(TokenTag.RIGHT_SQUARE) && this.match(TokenTag.COMMA));
 
     this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
