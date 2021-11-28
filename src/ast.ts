@@ -259,7 +259,6 @@ export namespace Expr {
   }
 }
 
-
 /* Statement Tree */
 export abstract class Stmt {
   public abstract accept<T>(visitor: Stmt.Visitor<T>): T;
@@ -380,7 +379,7 @@ export namespace Stmt {
   }
 
   export class Write extends Stmt {
-    constructor(public outputs: Expr[], public newline: boolean) {
+    constructor(public outputs: Expr[], public newline: boolean, public formats: WriteFormat[]) {
       super();
     }
     public accept<T>(visitor: Visitor<T>): T {
@@ -403,4 +402,9 @@ export namespace Stmt {
     visitWhileDo(stmt: WhileDo): T;
     visitWrite(stmt: Write): T;
   }
+}
+
+export interface WriteFormat {
+  spacing: Expr | null;
+  decimal: Expr | null;
 }

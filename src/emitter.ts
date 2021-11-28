@@ -674,25 +674,35 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   visitWrite(stmt: Stmt.Write) {
-    for (let e of stmt.outputs) {
-      const operand = this.visitAndPreserveStack(e);
+    for (let i = 0; i < stmt.outputs.length; i++) {
+      const output = stmt.outputs[i];
+      const format = stmt.formats[i];
+      const operand = this.visitAndPreserveStack(output);
+      const spacing = format.spacing ?
+        this.visitAndPreserveStack(format.spacing) :
+        this.wasm.i32.const(0);
 
       let call;
-      switch(e.type) {
-        case BaseType.Real:
-          call = this.runtime.putReal(operand);
-        break;
+      switch(output.type) {
+        case BaseType.Real: {
+          const decimal = format.decimal ?
+            this.visitAndPreserveStack(format.decimal) :
+            this.wasm.i32.const(-1);
+
+          call = this.runtime.putReal(operand, spacing, decimal);
+          break;
+        }
         case BaseType.Integer:
-          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_INT);
+          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_INT, spacing);
         break;
         case BaseType.Char:
-          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_CHAR);
+          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_CHAR, spacing);
         break;
         case BaseType.Boolean:
-          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_BOOL);
+          call = this.runtime.putInt(operand, Runtime.PUTINT_MODE_BOOL, spacing);
         break;
         default: // assumed String type
-          call = this.runtime.putStr(operand);
+          call = this.runtime.putStr(operand, spacing);
         break;
       }
 

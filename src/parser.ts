@@ -1,5 +1,5 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
-import { Expr, Stmt } from "./ast";
+import { Expr, Stmt, WriteFormat } from "./ast";
 import { ArrayType, BaseType, getTypeName, isBool, isMemoryType, isNumberType, isOrdinal, isPointer, isPointerTo, isRecord, isString, isStringLike, isTypeEqual, PascalType, Pointer, RecordType, StringType } from "./types"
 import { IdentifierType, ParamType, Program, Routine, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
@@ -811,6 +811,7 @@ export class Parser {
     this.advance();
     const newline = this.previous.tag === TokenTag.WRITELN;
     const outputs: Expr[] = [];
+    const formats: WriteFormat[] = [];
 
     if (this.match(TokenTag.LEFT_PAREN)) {
       if (!this.check(TokenTag.RIGHT_PAREN)) {
@@ -821,14 +822,45 @@ export class Parser {
           if (!this.isPrintable(expr.type)) {
             throw this.errorAt(exprStart, `Can't write type ${getTypeName(expr.type)} to console`);
           }
+
+          let format = this.writeFormat(expr.type);
+
           outputs.push(expr);
+          formats.push(format);
         } while (this.match(TokenTag.COMMA));
       }
 
       this.consume(TokenTag.RIGHT_PAREN, "Expect ')' after expression.");
     }
 
-    return new Stmt.Write(outputs, newline);
+    return new Stmt.Write(outputs, newline, formats);
+  }
+
+  private writeFormat(printType?: PascalType): WriteFormat {
+    let format: WriteFormat = {spacing: null, decimal: null};
+
+    if (this.match(TokenTag.COLON)) {
+      let start = this.current;
+      format.spacing = this.expression();
+      if (format.spacing.type !== BaseType.Integer) {
+        throw this.errorAt(start, `Incompatible type: expected ${getTypeName(BaseType.Integer)}, got ${getTypeName(format.spacing.type)}.`);
+      }
+
+      if (this.match(TokenTag.COLON)) {
+        if (printType !== BaseType.Real) {
+          throw this.errorAtPrevious(`Illegal use of ':'.`);
+        }
+
+        start = this.current;
+        format.decimal = this.expression();
+
+        if (format.decimal.type !== BaseType.Integer) {
+          throw this.errorAt(start, `Incompatible type: expected ${getTypeName(BaseType.Integer)}, got ${getTypeName(format.decimal.type)}.`);
+        }
+      }
+    }
+
+    return format;
   }
 
   private isPrintable(type?: PascalType): boolean {

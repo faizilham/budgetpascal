@@ -220,11 +220,11 @@ export class RuntimeBuilder {
   debugPrintStackTop(): number {
     const constant = (c: number) => this.wasm.i32.const(c);
     return this.wasm.block("", [
-      this.putInt(constant(83), Runtime.PUTINT_MODE_CHAR),
-      this.putInt(constant(80), Runtime.PUTINT_MODE_CHAR),
-      this.putInt(constant(58), Runtime.PUTINT_MODE_CHAR),
-      this.putInt(constant(32), Runtime.PUTINT_MODE_CHAR),
-      this.putInt(this.stackTop(), Runtime.PUTINT_MODE_INT),
+      this.putInt(constant(83), Runtime.PUTINT_MODE_CHAR, constant(0)),
+      this.putInt(constant(80), Runtime.PUTINT_MODE_CHAR, constant(0)),
+      this.putInt(constant(58), Runtime.PUTINT_MODE_CHAR, constant(0)),
+      this.putInt(constant(32), Runtime.PUTINT_MODE_CHAR, constant(0)),
+      this.putInt(this.stackTop(), Runtime.PUTINT_MODE_INT, constant(0)),
       this.putLn()
     ]);
   }
@@ -437,19 +437,19 @@ export class RuntimeBuilder {
 
   /* IO */
 
-  putInt(operand: number, mode: number): number {
+  putInt(operand: number, mode: number, spacing: number): number {
     this.importsUsed.add("io.$putint");
-    return this.wasm.call("io.$putint", [operand, this.wasm.i32.const(mode)], binaryen.none);
+    return this.wasm.call("io.$putint", [operand, this.wasm.i32.const(mode), spacing], binaryen.none);
   }
 
-  putReal(operand: number): number {
+  putReal(operand: number, spacing: number, decimal: number): number {
     this.importsUsed.add("io.$putreal");
-    return this.wasm.call("io.$putreal", [operand], binaryen.none);
+    return this.wasm.call("io.$putreal", [operand, spacing, decimal], binaryen.none);
   }
 
-  putStr(addr: number): number {
+  putStr(addr: number, spacing: number): number {
     this.importsUsed.add("io.$putstr");
-    return this.wasm.call("io.$putstr", [addr], binaryen.none);
+    return this.wasm.call("io.$putstr", [addr, spacing], binaryen.none);
   }
 
   putLn(): number {
@@ -543,10 +543,10 @@ export namespace Runtime {
 }
 
 const importFunctions: {[key: string]: [number, number]} = {
-  "io.$putint": [params(binaryen.i32, binaryen.i32), binaryen.none],
-  "io.$putreal": [binaryen.f64, binaryen.none],
+  "io.$putint": [params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.none],
+  "io.$putreal": [params(binaryen.f64, binaryen.i32, binaryen.i32), binaryen.none],
   "io.$putln": [binaryen.none, binaryen.none],
-  "io.$putstr": [ binaryen.i32, binaryen.none],
+  "io.$putstr": [ params(binaryen.i32, binaryen.i32), binaryen.none],
 
   "io.$readint": [binaryen.none, binaryen.i32],
   "io.$readchar": [binaryen.none, binaryen.i32],

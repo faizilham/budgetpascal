@@ -57,6 +57,7 @@ describe("Compiler with real console test", function() {
   const tests: [string, boolean][] = [
     ["read", true],
     ["libfuncs", false],
+    ["write_format", false],
   ];
 
   for (let [test, hasInput] of tests) {

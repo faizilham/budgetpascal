@@ -34,20 +34,36 @@ export function createImports(runner: Runner): Object {
     return decoder.decode(runner.memory.slice(start, end));
   }
 
+  const padded = (str: string, spacing: number): string => {
+    let padSize = spacing - str.length;
+    if (padSize < 1) return str;
+
+    return ' '.repeat(padSize) + str;
+  }
+
   const importObject = {
     io: {
-      $putint: (n: number, mode: number) => {
+      $putint: (n: number, mode: number, spacing: number) => {
+        let str;
         switch(mode) {
-          case 1: runner.sendCommand("write", String.fromCharCode(n)); break;
-          case 2: runner.sendCommand("write", n === 0 ? "FALSE" : "TRUE"); break;
+          case 1: str = String.fromCharCode(n); break;
+          case 2: str = n === 0 ? "FALSE" : "TRUE"; break;
           default:
-            runner.sendCommand("write", n.toString());
+            str = n.toString();
         }
+
+        runner.sendCommand("write", padded(str, spacing));
       },
-      $putreal: (x: number) => { runner.sendCommand("write", x.toExponential()); },
+      $putreal: (x: number, spacing: number, decimal: number) => {
+        let str = decimal < 0 ?
+          x.toExponential() :
+          x.toFixed(decimal);
+
+        runner.sendCommand("write", padded(str, spacing));
+      },
       $putln: () => { runner.sendCommand("write", "\n"); },
-      $putstr: (addr: number) => {
-        runner.sendCommand("write", getString(addr));
+      $putstr: (addr: number, spacing: number) => {
+        runner.sendCommand("write", padded(getString(addr), spacing));
       },
 
       $readint: () => {
