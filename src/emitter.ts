@@ -745,6 +745,39 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   private writeFileBinary(stmt: Stmt.Write) {
     //TODO:
+    const file = this.visitAndPreserveStack(stmt.outputFile as Expr);
+    this.currentBlock.push(this.runtime.setfile(file));
+
+    for (let i = 0; i < stmt.outputs.length; i++) {
+      const output = stmt.outputs[i];
+      const operand = this.visitAndPreserveStack(output);
+
+      let call;
+      switch(output.type) {
+        case BaseType.Real: {
+          call = this.runtime.fputReal(operand);
+          break;
+        }
+        case BaseType.Integer:
+          call = this.runtime.fputInt(operand, Runtime.PUTINT_MODE_INT);
+        break;
+        case BaseType.Char:
+          call = this.runtime.fputInt(operand, Runtime.PUTINT_MODE_CHAR);
+        break;
+        case BaseType.Boolean:
+          call = this.runtime.fputInt(operand, Runtime.PUTINT_MODE_BOOL);
+        break;
+        default: { // assumed memory type
+          let type = output.type as MemoryType;
+          call = this.runtime.fputMem(operand, type.bytesize);
+          break;
+        }
+      }
+
+      this.currentBlock.push(call);
+    }
+
+    this.currentBlock.push(this.runtime.unsetFile());
   }
 
   private addLoop() {

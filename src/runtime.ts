@@ -457,6 +457,21 @@ export class RuntimeBuilder {
     return this.wasm.call("rtl.$putln", [], binaryen.none);
   }
 
+  fputInt(operand: number, mode: number): number {
+    this.importsUsed.add("rtl.$fputint");
+    return this.wasm.call("rtl.$fputint", [operand, this.wasm.i32.const(mode)], binaryen.none);
+  }
+
+  fputReal(operand: number): number {
+    this.importsUsed.add("rtl.$fputreal");
+    return this.wasm.call("rtl.$fputreal", [operand], binaryen.none);
+  }
+
+  fputMem(operand: number, size: number): number {
+    this.importsUsed.add("rtl.$fputmem");
+    return this.wasm.call("rtl.$fputmem", [operand, this.wasm.i32.const(size)], binaryen.none);
+  }
+
   readInt(): number {
     this.importsUsed.add("rtl.$readint");
     return this.wasm.call("rtl.$readint", [], binaryen.i32);
@@ -557,6 +572,10 @@ const importFunctions: {[key: string]: [number, number]} = {
   "rtl.$putreal": [params(binaryen.f64, binaryen.i32, binaryen.i32), binaryen.none],
   "rtl.$putln": [binaryen.none, binaryen.none],
   "rtl.$putstr": [ params(binaryen.i32, binaryen.i32), binaryen.none],
+
+  "rtl.$fputint": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "rtl.$fputreal": [binaryen.f64, binaryen.none],
+  "rtl.$fputmem": [params(binaryen.i32, binaryen.i32), binaryen.none],
 
   "rtl.$readint": [binaryen.none, binaryen.i32],
   "rtl.$readchar": [binaryen.none, binaryen.i32],

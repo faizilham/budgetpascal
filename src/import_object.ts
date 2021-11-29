@@ -62,7 +62,7 @@ export function createImports(runner: Runner): Object {
     return ' '.repeat(padSize) + str;
   }
 
-  const sendWrite = (value: string) => {
+  const sendWrite = (value: string | Uint8Array) => {
     const data: any = { value };
     if (currentFile < 0) {
       runner.sendCommand("write", data);
@@ -186,6 +186,38 @@ export function createImports(runner: Runner): Object {
 
       $funset: () => {
         currentFile = -1;
+      },
+
+      $fputint: (n: number, mode: number) => {
+        let data;
+        if (mode === 0) {
+          let buffer = new ArrayBuffer(4);
+          let int = new Int32Array(buffer);
+          int[0] = n;
+          data = new Uint8Array(buffer);
+        } else {
+          data = new Uint8Array(1);
+          data[0] = n & 0xFF;
+        }
+
+        sendWrite(data);
+      },
+
+      $fputreal: (n: number) => {
+        let buffer = new ArrayBuffer(8);
+        let float = new Float64Array(buffer);
+        float[0] = n;
+
+        sendWrite(new Uint8Array(buffer));
+      },
+
+      $fputmem: (address: number, size: number) => {
+        let data = new Uint8Array(size);
+        for (let i = 0; i < size; i++) {
+          data[i] = runner.memory[address + i];
+        }
+
+        sendWrite(data);
       },
 
       $assign: (id: number, nameAddr: number) => {

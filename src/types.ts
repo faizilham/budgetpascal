@@ -164,7 +164,7 @@ export function isTextFile(type?: PascalType): boolean {
 }
 
 export function isFileOf(filetype?: PascalType, type?: PascalType): boolean {
-  return isFile(filetype) && isTypeEqual(type);
+  return isFile(filetype) && isTypeEqual(filetype.entryType, type);
 }
 
 export type TypeCheckFunc = (type?: PascalType) => boolean;

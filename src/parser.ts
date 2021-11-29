@@ -851,6 +851,11 @@ export class Parser {
             outputFile = expr;
             fileType = expr.type;
             first = false;
+
+            if (newline && !isTextFile(fileType)) {
+              throw this.errorAt(exprStart, `Can't use writeln for non-text file`);
+            }
+
             continue;
           }
 
