@@ -4,6 +4,10 @@ const sendCommand = (command, data) => {
   self.postMessage({command, data});
 };
 
+const printToTerminal = (value) => {
+  sendCommand("write", {value});
+}
+
 const runner = {
   iobuffer: null, sendCommand, memory: null
 };
@@ -16,12 +20,12 @@ function run(iobuffer, wasmModule) {
   runner.memory = new Uint8Array(instance.exports.mem.buffer);
   try {
     instance.exports.main();
-    sendCommand("write", "\nProgram finished.\n");
+    printToTerminal("\nProgram finished.\n");
   } catch (e) {
     if (e instanceof InterruptRuntime) {
-      sendCommand("write", "\nProgram interrupted.\n");
+      printToTerminal("\nProgram interrupted.\n");
     } else if (e instanceof RuntimeError) {
-      sendCommand("write", `\n${e.message}\n`);
+      printToTerminal(`\n${e.message}\n`);
     } else {
       console.error(e);
     }
