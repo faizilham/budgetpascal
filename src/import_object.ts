@@ -77,6 +77,10 @@ export function createImports(runner: Runner): Object {
     }
   }
 
+  const sendReadByte = (size: number) => {
+    sendFileCommand("readbyte", {fileId: currentFile, size})
+  }
+
   const importObject = {
     rtl: {
       $putint: (n: number, mode: number, spacing: number) => {
@@ -225,28 +229,66 @@ export function createImports(runner: Runner): Object {
         sendWrite(data);
       },
 
-      $assign: (id: number, nameAddr: number) => {
+      $freadint: (mode: number): number => {
+        let size = mode === 0 ? 4 : 1;
+        sendReadByte(size);
+
+        if (mode !== 0) {
+          return runner.iobuffer[2];
+        }
+
+        let buffer = new ArrayBuffer(4);
+        let int = new Int32Array(buffer);
+        let bytes = new Uint8Array(buffer);
+        for (let i = 0; i < 4; i++) {
+          bytes[i] = runner.iobuffer[i + 2];
+        }
+
+        return int[0];
+      },
+
+      $freadreal: (): number => {
+        const size = 8;
+        sendReadByte(size);
+
+        let buffer = new ArrayBuffer(size);
+        let float = new Float64Array(buffer);
+        let bytes = new Uint8Array(buffer);
+        for (let i = 0; i < size; i++) {
+          bytes[i] = runner.iobuffer[i + 2];
+        }
+
+        return float[0];
+      },
+
+      $freadmem: (address: number, size: number) => {
+        sendReadByte(size);
+
+        for (let i = 0; i < size; i++) {
+          runner.memory[address + i] = runner.iobuffer[i + 2];
+        }
+      },
+
+      $assign: (fileId: number, nameAddr: number) => {
         const filename = getString(nameAddr);
-        runner.sendCommand("assignFile", {id, filename});
+        runner.sendCommand("assignFile", {fileId, filename});
       },
 
-      $reset: (id: number) => {
-        sendFileCommand("resetFile", {id});
+      $reset: (fileId: number) => {
+        sendFileCommand("resetFile", {fileId});
       },
 
-      $rewrite: (id: number) => {
-        sendFileCommand("rewriteFile", {id});
+      $rewrite: (fileId: number) => {
+        sendFileCommand("rewriteFile", {fileId});
       },
 
-      $close: (id: number) => {
-        sendFileCommand("closeFile", {id});
-        // TODO:
+      $close: (fileId: number) => {
+        sendFileCommand("closeFile", {fileId});
       },
 
-      $eof: (id: number): boolean => {
-        // TODO:
-
-        return false;
+      $eof: (fileId: number): boolean => {
+        sendFileCommand("eofFile", {fileId});
+        return runner.iobuffer[2] !== 0;
       },
 
       $pos: (substrAddr: number, sourceAddr: number): number => {
@@ -282,4 +324,5 @@ const FileHandlerErrors = {
   [FileHandlerStatus.READONLY]: "File is in read-only mode.",
   [FileHandlerStatus.WRITEONLY]: "File is in write-only mode.",
   [FileHandlerStatus.WRITE_ERROR]: "Error when writing file.",
+  [FileHandlerStatus.FILE_ENDED]: "File is at end.",
 }

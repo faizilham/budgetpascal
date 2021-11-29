@@ -134,23 +134,33 @@ function runFile(filename) {
         break;
       }
 
+      case "eofFile" :{
+        filehandler.eof(message.data.fileId).then(notifyResult);
+        break;
+      }
+
+      case "readbyte": {
+        filehandler.readbyte(message.data.fileId, message.data.size).then(notifyResult);
+        break;
+      }
+
       case "assignFile": {
-        filehandler.assign(message.data.id, message.data.filename);
+        filehandler.assign(message.data.fileId, message.data.filename);
         break;
       }
 
       case "resetFile": {
-        filehandler.reset(message.data.id).then(notifyResult);
+        filehandler.reset(message.data.fileId).then(notifyResult);
         break;
       }
 
       case "rewriteFile": {
-        filehandler.rewrite(message.data.id).then(notifyResult);
+        filehandler.rewrite(message.data.fileId).then(notifyResult);
         break;
       }
 
       case "closeFile": {
-        filehandler.close(message.data.id).then(notifyResult);
+        filehandler.close(message.data.fileId).then(notifyResult);
         break;
       }
     }

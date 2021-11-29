@@ -17,7 +17,8 @@ export enum FileHandlerStatus {
   NOT_ASSIGNED,
   READONLY,
   WRITEONLY,
-  WRITE_ERROR
+  WRITE_ERROR,
+  FILE_ENDED
 }
 
 export class FileHandler {
@@ -34,6 +35,16 @@ export class FileHandler {
       length: 0,
       position: 0
     };
+  }
+
+  async eof(id: number): Promise<FileHandlerStatus> {
+    const file = this.files[id];
+    if (!file) return FileHandlerStatus.NOT_ASSIGNED;
+    if (!file.buffer) return FileHandlerStatus.CLOSED;
+
+    const isEof = file.position === file.length ? 1 : 0;
+    this.iobuffer[2] = isEof;
+    return FileHandlerStatus.OK;
   }
 
   async reset(id: number): Promise<FileHandlerStatus> {
@@ -66,7 +77,25 @@ export class FileHandler {
   }
 
   async readbyte(id: number, size: number): Promise<FileHandlerStatus> {
-    return FileHandlerStatus.NOT_ASSIGNED; //TODO:
+    const file = this.files[id];
+    if (!file) return FileHandlerStatus.NOT_ASSIGNED;
+    if (!file.buffer) return FileHandlerStatus.CLOSED;
+    if (!file.readmode) return FileHandlerStatus.WRITEONLY;
+
+    let bytesRead = 0;
+
+    for (let i = 0; i < size; i++) {
+      if (i + file.position >= file.length) break;
+      this.iobuffer[i + 2] = file.buffer[i + file.position];
+      bytesRead++;
+    }
+
+    file.position += bytesRead;
+    this.iobuffer[1] = bytesRead;
+
+    if (bytesRead !== size) return FileHandlerStatus.FILE_ENDED;
+
+    return FileHandlerStatus.OK;
   }
 
   async readline(id: number): Promise<FileHandlerStatus> {

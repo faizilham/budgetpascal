@@ -582,7 +582,45 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   private readBinaryFile(stmt: Stmt.Read) {
+    const file = this.visitAndPreserveStack(stmt.inputFile as Expr);
+    this.currentBlock.push(this.runtime.setfile(file));
 
+    for (let target of stmt.targets) {
+      let call;
+      if (isMemoryType(target.type)) {
+        const addr = target.accept(this);
+        call = this.runtime.freadMem(addr, target.type.bytesize);
+      } else if (isPointerTo(target.type, isMemoryType)) {
+        const type = (target.type as Pointer).source as MemoryType;
+        const addr = target.accept(this);
+        call = this.runtime.freadMem(addr, type.bytesize);
+      } else if (isPointer(target.type)) {
+        const address = target.accept(this);
+        const sourceType = target.type.source as BaseType
+        call = this.setMemory(address, this.readBinaryBaseType(sourceType), sourceType);
+      } else if (target instanceof Expr.Variable) {
+        const entry = target.entry;
+
+        call = this.setVariable(entry, this.readBinaryBaseType(entry.type as BaseType));
+      } else {
+        throw new UnreachableErr(`Invalid read`);
+      }
+
+      this.currentBlock.push(call);
+    }
+
+    this.currentBlock.push(this.runtime.unsetFile());
+  }
+
+  private readBinaryBaseType(type: BaseType): number {
+    switch(type) {
+      case BaseType.Real: return this.runtime.freadReal();
+      case BaseType.Integer: return this.runtime.freadInt(Runtime.PUTINT_MODE_INT);
+      case BaseType.Boolean: return this.runtime.freadInt(Runtime.PUTINT_MODE_BOOL);
+      case BaseType.Char: this.runtime.freadInt(Runtime.PUTINT_MODE_CHAR);
+      default:
+        throw new UnreachableErr(`Invalid read for type ${getTypeName(type)}`);
+    }
   }
 
   visitRepeatUntil(stmt: Stmt.RepeatUntil) {
@@ -761,7 +799,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   private writeFileBinary(stmt: Stmt.Write) {
-    //TODO:
     const file = this.visitAndPreserveStack(stmt.outputFile as Expr);
     this.currentBlock.push(this.runtime.setfile(file));
 

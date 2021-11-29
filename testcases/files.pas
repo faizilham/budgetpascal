@@ -16,7 +16,7 @@ program files;
     f2: file of point;
     a: arr3;
     p: point;
-    x: integer;
+    i, x: integer;
     str: string[5];
     r: real;
 
@@ -28,6 +28,11 @@ program files;
     p.y := y;
     p.z := z;
     p.code := code;
+  end;
+
+  procedure printPoint(const p: point);
+  begin
+    writeln(p.code, ' : (', p.x, ',', p.y, ',', p.z, ')');
   end;
 
 begin
@@ -53,12 +58,28 @@ begin
   x := 5;
   write(f, x);
   write(f, 767);
+  write(f, 655360);
   close(f);
+
+  reset(f);
+  for i := 1 to 3 do
+    read(f, a[i]);
+  close(f);
+
+  for i := 1 to 3 do write(a[i], ' ');
+  writeln;
 
   assign(f1, 'tmp/files_bin2');
   rewrite(f1);
   write(f1, 1.2345);
   write(f1, 3.4567);
+  close(f1);
+
+  reset(f1);
+  read(f1, r);
+  writeln(r);
+  read(f1, r);
+  writeln(r);
   close(f1);
 
   assign(f2, 'tmp/files_bin3');
@@ -72,6 +93,14 @@ begin
 
   setpoint(p, 8,9,10, 'c');
   write(f2, p);
+  close(f2);
+
+  reset(f2);
+  while not eof(f2) do begin
+    read(f2, p);
+    printPoint(p);
+  end;
+
   close(f2);
 
 end.

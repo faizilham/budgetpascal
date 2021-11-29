@@ -497,6 +497,22 @@ export class RuntimeBuilder {
     return this.wasm.call("rtl.$readln", [], binaryen.none);
   }
 
+
+  freadInt(mode: number): number {
+    this.importsUsed.add("rtl.$freadint");
+    return this.wasm.call("rtl.$freadint", [this.wasm.i32.const(mode)], binaryen.i32);
+  }
+
+  freadReal(): number {
+    this.importsUsed.add("rtl.$freadreal");
+    return this.wasm.call("rtl.$freadreal", [], binaryen.f64);
+  }
+
+  freadMem(operand: number, size: number): number {
+    this.importsUsed.add("rtl.$freadmem");
+    return this.wasm.call("rtl.$freadmem", [operand, this.wasm.i32.const(size)], binaryen.none);
+  }
+
   setfile(id: number): number {
     this.importsUsed.add("rtl.$fset");
     return this.wasm.call("rtl.$fset", [id], binaryen.none);
@@ -582,6 +598,10 @@ const importFunctions: {[key: string]: [number, number]} = {
   "rtl.$readreal": [binaryen.none, binaryen.f64],
   "rtl.$readstr": [params(binaryen.i32, binaryen.i32), binaryen.none],
   "rtl.$readln": [binaryen.none, binaryen.none],
+
+  "rtl.$freadint": [binaryen.i32, binaryen.i32],
+  "rtl.$freadreal": [binaryen.none, binaryen.f64],
+  "rtl.$freadmem": [params(binaryen.i32, binaryen.i32), binaryen.none],
 
   // files
   "rtl.$fset": [binaryen.i32, binaryen.none],
