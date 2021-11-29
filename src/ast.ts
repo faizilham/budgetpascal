@@ -321,7 +321,7 @@ export namespace Stmt {
   }
 
   export class Read extends Stmt {
-    constructor(public targets: Expr[], public newline: boolean) {
+    constructor(public targets: Expr[], public newline: boolean, public inputFile?: Expr) {
       super();
     }
 

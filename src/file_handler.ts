@@ -65,8 +65,33 @@ export class FileHandler {
     return FileHandlerStatus.OK;
   }
 
-  async readbyte(id: number): Promise<FileHandlerStatus> {
+  async readbyte(id: number, size: number): Promise<FileHandlerStatus> {
     return FileHandlerStatus.NOT_ASSIGNED; //TODO:
+  }
+
+  async readline(id: number): Promise<FileHandlerStatus> {
+    const file = this.files[id];
+    if (!file) return FileHandlerStatus.NOT_ASSIGNED;
+    if (!file.buffer) return FileHandlerStatus.CLOSED;
+    if (!file.readmode) return FileHandlerStatus.WRITEONLY;
+
+    const maxBufferLength = this.iobuffer.length - 2;
+    let readlength = 0;
+    let i = 0;
+    while(i + file.position < file.length) {
+      readlength++;
+      let read = file.buffer[i + file.position];
+      this.iobuffer[i + 2] = read;
+      i++;
+
+      if (read === 10) break; // found newline
+      if (readlength === maxBufferLength) break;
+    }
+
+    file.position += i;
+    this.iobuffer[1] = readlength;
+
+    return FileHandlerStatus.OK;
   }
 
   async writebyte(id: number, data: Uint8Array | string): Promise<FileHandlerStatus>  {

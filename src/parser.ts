@@ -757,21 +757,45 @@ export class Parser {
     this.advance();
     const newline = this.previous.tag === TokenTag.READLN;
     const targets: Expr[] = [];
+    let inputFile: Expr | undefined;
+    let fileType: PascalType | undefined;
 
     if (this.match(TokenTag.LEFT_PAREN)){
       if (!this.check(TokenTag.RIGHT_PAREN)) {
+        let first = true;
         do {
           const exprStart = this.current;
           let expr = this.expression();
           const readType = expr.type;
+
+          if (first && isFile(expr.type)) {
+            inputFile = expr;
+            fileType = expr.type;
+            first = false;
+
+            if (newline && !isTextFile(fileType)) {
+              throw this.errorAt(exprStart, `Can't use readln for non-text file`);
+            }
+
+            continue;
+          }
+
           expr = this.removeDeref(expr);
 
           if (!expr.assignable || (!isPointer(expr.type) && !(expr instanceof Expr.Variable))) {
             throw this.errorAt(exprStart, "Expect assignable variable, array element or record field.");
           }
 
-          if (!this.isReadable(readType)) {
-            throw this.errorAt(exprStart, `Can't read type ${getTypeName(readType)} from console`);
+          if (isFile(fileType)) {
+            if (isTextFile(fileType)) {
+              if (!this.isReadable(readType)) {
+                throw this.errorAt(exprStart, `Can't read type ${getTypeName(readType)} from text file.`);
+              }
+            } else if (!isFileOf(fileType, readType)) {
+              throw this.errorAt(exprStart, `Mismatched types, expected ${getTypeName(fileType.entryType)} got ${getTypeName(readType)}.`);
+            }
+          } else if (!this.isReadable(readType)) {
+            throw this.errorAt(exprStart, `Can't read type ${getTypeName(readType)} from console.`);
           }
 
           targets.push(expr);
@@ -781,7 +805,7 @@ export class Parser {
       this.consume(TokenTag.RIGHT_PAREN, "Expect ')'.");
     }
 
-    return new Stmt.Read(targets, newline);
+    return new Stmt.Read(targets, newline, inputFile);
   }
 
   private isReadable(type?: PascalType) {

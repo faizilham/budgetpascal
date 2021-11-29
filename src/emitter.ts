@@ -525,8 +525,17 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   visitRead(stmt: Stmt.Read): void {
-    for (let target of stmt.targets) {
+    if (stmt.inputFile) {
+      if (isTextFile(stmt.inputFile.type)) {
+        const file = this.visitAndPreserveStack(stmt.inputFile);
+        this.currentBlock.push(this.runtime.setfile(file));
+      } else {
+        this.readBinaryFile(stmt);
+        return;
+      }
+    }
 
+    for (let target of stmt.targets) {
       let call;
       if (isString(target.type)) {
         call = this.readString(target, target.type);
@@ -551,6 +560,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     if (stmt.newline) {
       this.currentBlock.push(this.runtime.readLn());
     }
+
+    if (stmt.inputFile) {
+      this.currentBlock.push(this.runtime.unsetFile());
+    }
   }
 
   private readBaseType(type: BaseType): number {
@@ -566,6 +579,10 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   private readString(target: Expr, type: StringType): number {
     const addr = target.accept(this);
     return this.runtime.readStr(addr, type.size);
+  }
+
+  private readBinaryFile(stmt: Stmt.Read) {
+
   }
 
   visitRepeatUntil(stmt: Stmt.RepeatUntil) {

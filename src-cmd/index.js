@@ -79,16 +79,16 @@ function runFile(filename) {
     }
   });
 
+  const runDir = process.cwd();
+
   const fileRead = async (filename) => {
     try {
-      const data = await fsPromise.readFile(filename);
+      const data = await fsPromise.readFile(path.join(runDir, filename));
       return new Uint8Array(data);
     } catch(e) {
       return null;
     }
   }
-
-  const runDir = process.cwd();
 
   const fileWrite = async (filename, data) => {
     try {
@@ -121,17 +121,26 @@ function runFile(filename) {
         break;
       }
       case "read": {
-        if (inputPaused) {
-          inputPaused = false;
-          rl.resume();
-        }
+        if (message.data?.fileId != null) {
+          filehandler.readline(message.data.fileId).then(notifyResult);
+        } else {
+          if (inputPaused) {
+            inputPaused = false;
+            rl.resume();
+          }
 
-        notifyRead();
+          notifyRead();
+        }
         break;
       }
 
       case "assignFile": {
         filehandler.assign(message.data.id, message.data.filename);
+        break;
+      }
+
+      case "resetFile": {
+        filehandler.reset(message.data.id).then(notifyResult);
         break;
       }
 

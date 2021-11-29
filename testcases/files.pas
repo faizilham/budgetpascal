@@ -17,6 +17,8 @@ program files;
     a: arr3;
     p: point;
     x: integer;
+    str: string[5];
+    r: real;
 
     txt: text;
 
@@ -32,9 +34,19 @@ begin
   assign(txt, 'tmp/files_text.txt');
   rewrite(txt);
   writeln(txt, 1, 2, 3);
-  writeln(txt, 'abcdefg':10, 1.5:0:3);
+  writeln(txt, 'abcdefg':10);
+  writeln(txt, 1.5:8:3);
   writeln('txt written!');
   close(txt);
+
+  reset(txt);
+  readln(txt, x);
+  readln(txt, str);
+  readln(txt, r);
+  close(txt);
+
+  writeln(x, ' ', r);
+  writeln(str);
 
   assign(f, 'tmp/files_bin1');
   rewrite(f);

@@ -20,9 +20,14 @@ export function createImports(runner: Runner): Object {
   let currentFile = -1;
 
   const requestReadline = () => {
-    Atomics.store(runner.iobuffer, 0, 0);
-    runner.sendCommand("read");
-    Atomics.wait(runner.iobuffer, 0, 0);
+
+    if (currentFile < 0) {
+      Atomics.store(runner.iobuffer, 0, 0);
+      runner.sendCommand("read", {});
+      Atomics.wait(runner.iobuffer, 0, 0);
+    } else {
+      sendFileCommand("read", {fileId: currentFile})
+    }
 
     const length = runner.iobuffer[1];
     if (length === 0) return;
@@ -226,7 +231,7 @@ export function createImports(runner: Runner): Object {
       },
 
       $reset: (id: number) => {
-        // TODO:
+        sendFileCommand("resetFile", {id});
       },
 
       $rewrite: (id: number) => {
