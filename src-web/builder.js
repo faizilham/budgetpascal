@@ -1,4 +1,5 @@
 import {compile} from "../src/";
+import { FileHandler } from "../src/file_handler";
 
 const cache = {
   code: null,
@@ -30,7 +31,7 @@ export function compileCode(code, terminal, cached = true) {
   return binary;
 }
 
-export function runCode(binary, terminal) {
+export function runCode(binary, terminal, files) {
   terminal.writeln("Running...");
 
   const iobuffer = new Int32Array(new SharedArrayBuffer(1064));
@@ -38,7 +39,68 @@ export function runCode(binary, terminal) {
 
   const worker = new Worker(new URL('runner.js', import.meta.url), {type: "module"});
 
-  terminal.registerRunner(iobuffer, worker);
+  const fileRead = async (filename) => files.read(filename);
+  const fileWrite = async (filename, data) => files.write(filename, data);
+  const filehandler = new FileHandler(iobuffer, fileRead, fileWrite);
+
+  const notifyResult = (result) => {
+    Atomics.store(iobuffer, 0, result);
+    Atomics.notify(iobuffer, 0, 1);
+  };
+
+  worker.addEventListener('message', (event) => {
+    const message = event.data;
+
+    switch(message?.command) {
+      case "write": {
+        if (message.data.fileId == null) {
+          terminal.write(message.data.value);
+        } else {
+          filehandler.writebyte(message.data.fileId, message.data.value)
+            .then(notifyResult);
+        }
+        break;
+      }
+      case "read": {
+        if (message.data?.fileId != null) {
+          filehandler.readline(message.data.fileId).then(notifyResult);
+        } else {
+          terminal.readToBuffer(iobuffer);
+        }
+        break;
+      }
+
+      case "eofFile" :{
+        filehandler.eof(message.data.fileId).then(notifyResult);
+        break;
+      }
+
+      case "readbyte": {
+        filehandler.readbyte(message.data.fileId, message.data.size).then(notifyResult);
+        break;
+      }
+
+      case "assignFile": {
+        filehandler.assign(message.data.fileId, message.data.filename);
+        break;
+      }
+
+      case "resetFile": {
+        filehandler.reset(message.data.fileId).then(notifyResult);
+        break;
+      }
+
+      case "rewriteFile": {
+        filehandler.rewrite(message.data.fileId).then(notifyResult);
+        break;
+      }
+
+      case "closeFile": {
+        filehandler.close(message.data.fileId).then(notifyResult);
+        break;
+      }
+    }
+  });
 
   worker.postMessage({iobuffer, wasmModule});
   terminal.focus();

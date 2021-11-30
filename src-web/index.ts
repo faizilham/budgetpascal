@@ -8,11 +8,13 @@ import "codemirror/theme/material-darker.css";
 import "codemirror/mode/pascal/pascal.js";
 import "./style/main.scss"
 import { TerminalUI } from "./terminal_ui";
+import { Files } from "./files";
 
 function init() {
   const editor = createEditor();
   const terminal = createTerminal();
-  initCompileButton(editor, terminal);
+  const files = new Files();
+  initCompileButton(editor, terminal, files);
 };
 
 function createEditor() {
@@ -34,7 +36,7 @@ function createTerminal() {
   return new TerminalUI(container);
 }
 
-function initCompileButton(editor: CodeMirror.Editor, terminal: TerminalUI) {
+function initCompileButton(editor: CodeMirror.Editor, terminal: TerminalUI, files: Files) {
   const compileButton = document.getElementById("btn-compile") as HTMLElement;
 
   compileButton.addEventListener("click", () => {
@@ -45,7 +47,7 @@ function initCompileButton(editor: CodeMirror.Editor, terminal: TerminalUI) {
     try {
       const binary = compileCode(code, terminal);
       if (!binary) return;
-      runCode(binary, terminal);
+      runCode(binary, terminal, files);
 
     } finally {
       compileButton.removeAttribute("disabled");

@@ -62,21 +62,7 @@ export class TerminalUI {
     this.write(data + "\n");
   }
 
-  registerRunner(iobuffer: Int32Array, runner: Worker) {
-    runner.addEventListener('message', (event) => {
-      const msg = event.data;
-
-      switch(msg?.command) {
-        case "write": this.write(msg.data.value); break;
-        case "read": {
-          this.readToBuffer(iobuffer);
-          break;
-        }
-      }
-    });
-  }
-
-  private async readToBuffer(iobuffer: Int32Array) {
+  async readToBuffer(iobuffer: Int32Array) {
     this.showCursor(true);
     let prompt = "";
     if (this.currentLine) {
