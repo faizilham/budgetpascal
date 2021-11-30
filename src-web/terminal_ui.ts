@@ -1,11 +1,15 @@
 import {Terminal} from "xterm";
-import LocalEchoController from "./local-echo";
+import ansi from 'ansi-escapes';
+
+type ResolveFunc = ((result: string|null) => void);
 
 export class TerminalUI {
   terminal: Terminal;
   cursorShown: boolean;
-  localEcho: LocalEchoController;
-  currentLine: string | null;
+  private readlineActive: boolean;
+  private readResolver: ResolveFunc | null;
+  private readline: string;
+  private readcursor: number;
 
   constructor(container: HTMLElement) {
     this.terminal = new Terminal({
@@ -15,12 +19,157 @@ export class TerminalUI {
     });
 
     this.cursorShown = false;
-    this.currentLine = null;
+    this.readlineActive = false;
 
-    this.localEcho = new LocalEchoController();
-    this.terminal.loadAddon(this.localEcho);
+    this.readResolver = null;
+    this.readline = "";
+    this.readcursor = 0;
+
+    this.terminal.onData((data) => this.handleData(data));
 
     this.terminal.open(container);
+  }
+
+  private startRead() {
+    if (this.readlineActive) return;
+    this.readlineActive = true;
+    this.readline = "";
+    this.readcursor = 0;
+
+    return new Promise<string|null>((resolve) => {
+      this.readResolver = resolve;
+    });
+  }
+
+  private finishRead(interrupted: boolean) {
+    if (!this.readlineActive) return;
+
+    let result = null;
+    if (!interrupted) {
+      result = this.readline + "\r\n";
+    }
+
+    this.readlineActive = false;
+
+    (this.readResolver as ResolveFunc)(result);
+    this.readResolver = null;
+  }
+
+  private insertData(data: string) {
+    const newReadline = this.readline.substring(0, this.readcursor) + data + this.readline.substring(this.readcursor);
+    this.refreshReadline(newReadline, data.length)
+  }
+
+  private refreshReadline(newReadline: string, moveCursor: number) {
+    if (this.readcursor > 0) {
+      this.terminal.write(ansi.cursorBackward(this.readcursor));
+    }
+    this.terminal.write(ansi.eraseEndLine);
+
+    this.terminal.write(newReadline);
+    this.readline = newReadline;
+    this.readcursor += moveCursor;
+
+    if (this.readcursor < 0) {
+      this.readcursor = 0;
+    } else if (this.readcursor > this.readline.length) {
+      this.readcursor = this.readline.length;
+    }
+
+    const offset = this.readline.length - this.readcursor;
+    if (offset > 0) {
+      this.terminal.write(ansi.cursorBackward(offset));
+    }
+  }
+
+  private moveReadCursor(offset: number) {
+    if (offset < 0) {
+      let newPos = this.readcursor + offset;
+      if (newPos < 0) newPos = 0;
+
+      const change = this.readcursor - newPos;
+      if (change > 0){
+        this.terminal.write(ansi.cursorBackward(change));
+      }
+      this.readcursor = newPos;
+    } else if (offset > 0) {
+      let newPos = this.readcursor + offset;
+      if (newPos > this.readline.length) newPos = this.readline.length;
+      const change = newPos - this.readcursor;
+
+      if (change > 0) {
+        this.terminal.write(ansi.cursorForward(change));
+      }
+      this.readcursor = newPos;
+    }
+  }
+
+  private handleErase(isBackspace: boolean) {
+    let newReadline;
+    let moveCursor;
+
+    if (isBackspace) {
+      if (this.readcursor === 0) return;
+      newReadline = this.readline.substring(0, this.readcursor - 1) + this.readline.substring(this.readcursor);
+      moveCursor = -1;
+    } else {
+      if (this.readcursor === this.readline.length) return;
+      newReadline = this.readline.substring(0, this.readcursor) + this.readline.substring(this.readcursor + 1);
+      moveCursor = 0;
+    }
+
+    this.refreshReadline(newReadline, moveCursor);
+  }
+
+  private handleData(data: string) {
+    if (!this.readlineActive) return;
+
+    const ord = data.charCodeAt(0);
+
+    if (ord === 0x1b) { // handle ansi sequence
+      switch(data.substring(1)) {
+        case "[D": // Left Arrow
+          this.moveReadCursor(-1);
+        break;
+
+        case "[C": // Right Arrow
+          this.moveReadCursor(1);
+        break;
+        case "[3~": // Delete
+          this.handleErase(false);
+        break;
+
+        case "[F": // End
+          this.moveReadCursor(this.readline.length);
+        break;
+
+        case "[H": // Home
+          this.moveReadCursor(-this.readcursor);
+        break;
+      }
+    } else if (ord < 32 || ord === 0x7f) {
+      switch (data) {
+        case "\r": // ENTER
+          this.finishRead(false);
+        break;
+
+        case "\x7F": // BACKSPACE
+          this.handleErase(true);
+        break;
+
+        case "\t": // TAB
+          this.insertData("    ");
+        break;
+
+        case "\x03": // CTRL+C
+          this.moveReadCursor(this.readline.length);
+          this.terminal.write("^C\r\n");
+          this.finishRead(true);
+        break;
+        }
+    } else {
+      this.insertData(data);
+    }
   }
 
   showCursor(show: boolean) {
@@ -31,31 +180,25 @@ export class TerminalUI {
   }
 
   clear() {
-    this.terminal.clear();
+    this.terminal.write(ansi.clearTerminal);
+  }
+
+  gotoXY(x: number, y: number) {
+    this.terminal.write(ansi.cursorTo(x - 1, y - 1));
+  }
+
+  cursorPos() {
+    const x = this.terminal.buffer.active.cursorX + 1;
+    const y = this.terminal.buffer.active.cursorY + 1;
+    return {x, y};
   }
 
   focus() {
     this.terminal.focus();
   }
 
-  private prependCurrentLine(str: string) {
-    return this.currentLine != null ? this.currentLine + str : str;
-  }
-
   write(data: string) {
-    let lastLineBreak = data.lastIndexOf("\n");
-
-    if (lastLineBreak < 0) {
-      this.currentLine = this.prependCurrentLine(data);
-    } else if (lastLineBreak === data.length - 1) {
-      this.localEcho.print(this.prependCurrentLine(data));
-      this.currentLine = null;
-    } else {
-      const head = data.slice(0, lastLineBreak + 1);
-      const tail = data.slice(lastLineBreak + 1);
-      this.localEcho.print(this.prependCurrentLine(head));
-      this.currentLine = tail;
-    }
+    this.terminal.write(data.replace(/\r?\n/g, "\r\n"));
   }
 
   writeln(data: string) {
@@ -64,13 +207,7 @@ export class TerminalUI {
 
   async readToBuffer(iobuffer: Int32Array) {
     this.showCursor(true);
-    let prompt = "";
-    if (this.currentLine) {
-      prompt = this.currentLine;
-      this.currentLine = null;
-    }
-
-    let input = await this.localEcho.read(prompt);
+    let input = await this.startRead();
     this.showCursor(false);
 
     if (input == null) {

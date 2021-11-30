@@ -91,6 +91,7 @@ THEN then 38
 TO to 38
 TYPE type 38
 UNTIL until 38
+USES uses 38
 VAR var 38
 WHILE while 38
 READ read 39

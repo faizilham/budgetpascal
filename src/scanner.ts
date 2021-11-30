@@ -26,7 +26,7 @@ export enum TokenTag {
   // Keywords
   ARRAY, BEGIN, BREAK, CONTINUE, CASE, CONST, DO, DOWNTO, ELSE, END, FILE, FOR,
   FUNCTION, FORWARD, IF, OF, PROCEDURE, PROGRAM, RECORD, REPEAT, THEN, TO,
-  TYPE, STRING_TYPE, UNTIL, VAR, WHILE, READ, READLN, WRITE, WRITELN
+  TYPE, STRING_TYPE, UNTIL, USES, VAR, WHILE, READ, READLN, WRITE, WRITELN
 }
 
 export class Token {
@@ -108,6 +108,7 @@ const KeywordTokens : {[key: string]: TokenTag} = {
   "true": TokenTag.TRUE,
   "type": TokenTag.TYPE,
   "until": TokenTag.UNTIL,
+  "uses": TokenTag.USES,
   "var": TokenTag.VAR,
   "while": TokenTag.WHILE,
   "write": TokenTag.WRITE,

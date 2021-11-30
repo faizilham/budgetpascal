@@ -18,7 +18,10 @@
   "targets": {
     "cmd": {
       "context": "node",
-      "source": ["src-cmd/index.js", "src-cmd/runner.js"],
+      "source": [
+        "src-cmd/index.js",
+        "src-cmd/runner.js"
+      ],
       "outputFormat": "commonjs",
       "sourceMap": false
     },
@@ -44,6 +47,7 @@
   },
   "dependencies": {
     "@types/codemirror": "^5.60.5",
+    "ansi-escapes": "^5.0.0",
     "binaryen": "^102.0.0",
     "codemirror": "^5.63.3",
     "readline": "^1.3.0",

@@ -564,14 +564,15 @@ type BuilderFunc = (wasm: binaryen.Module, libfunc: LibraryFunction) => void;
 export namespace Runtime {
   export type Library = {[key: string]: LibraryFunction[]};
   const library: {[key: string]: Library} = {
-    "rtl": rtl()
+    "rtl": rtl(),
+    "crt": crt()
   };
 
   export function hasLibrary(libname: string): boolean {
     return library[libname] != null;
   }
 
-  export function findLibraryFunctions(libnames: string[], funcName: string): LibraryFunction[] | null {
+  export function findLibraryFunctions(libnames: Set<string>, funcName: string): LibraryFunction[] | null {
     for (let libname of libnames) {
       const lib = library[libname];
       if (!lib) continue;
@@ -615,6 +616,15 @@ const importFunctions: {[key: string]: [number, number]} = {
 
   /* rtl */
   "rtl.$pos": [params(binaryen.i32, binaryen.i32), binaryen.i32],
+
+  /* crt */
+  "crt.$clrscr": [binaryen.none, binaryen.none],
+  "crt.$cursoron": [binaryen.none, binaryen.none],
+  "crt.$cursoroff": [binaryen.none, binaryen.none],
+  "crt.$gotoxy": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "crt.$wherex": [binaryen.none, binaryen.i32],
+  "crt.$wherey": [binaryen.none, binaryen.i32],
+  "crt.$readkey": [binaryen.none, binaryen.i32],
 };
 
 function rtl(): Runtime.Library {
@@ -645,6 +655,18 @@ function rtl(): Runtime.Library {
       new LibraryFunction("rtl.$eof", Types.BaseType.Boolean, [Types.isFile], null)
     ],
   }
+}
+
+function crt(): Runtime.Library {
+  return {
+    "clrscr": [new LibraryFunction("crt.$clrscr", Types.BaseType.Void, [], null)],
+    "cursoron": [new LibraryFunction("crt.$cursoron", Types.BaseType.Void, [], null)],
+    "cursoroff": [new LibraryFunction("crt.$cursoroff", Types.BaseType.Void, [], null)],
+    "gotoxy": [new LibraryFunction("crt.$gotoxy", Types.BaseType.Void, [Types.BaseType.Integer, Types.BaseType.Integer], null)],
+    "wherex": [new LibraryFunction("crt.$wherex", Types.BaseType.Integer, [], null)],
+    "wherey": [new LibraryFunction("crt.$wherey", Types.BaseType.Integer, [], null)],
+    "readkey": [new LibraryFunction("crt.$readkey", Types.BaseType.Char, [], null)],
+  };
 }
 
 /* native library implementations */

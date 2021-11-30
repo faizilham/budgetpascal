@@ -70,6 +70,8 @@ export function runCode(binary, terminal, files) {
         break;
       }
 
+      /* files */
+
       case "eofFile" :{
         filehandler.eof(message.data.fileId).then(notifyResult);
         break;
@@ -97,6 +99,34 @@ export function runCode(binary, terminal, files) {
 
       case "closeFile": {
         filehandler.close(message.data.fileId).then(notifyResult);
+        break;
+      }
+
+      /* crt */
+      case "clrscr": {
+        terminal.clear();
+        break;
+      }
+
+      case "gotoxy": {
+        terminal.gotoXY(message.data.x, message.data.y);
+        break;
+      }
+
+      case "wherex": {
+        iobuffer[1] = terminal.cursorPos().x;
+        notifyResult(1);
+        break;
+      }
+
+      case "wherey": {
+        iobuffer[1] = terminal.cursorPos().y;
+        notifyResult(1);
+        break;
+      }
+
+      case "readkey": {
+
         break;
       }
     }

@@ -77,6 +77,13 @@ export function createImports(runner: Runner): Object {
     }
   }
 
+  const requestValue = (command: string, data?: any): number => {
+    Atomics.store(runner.iobuffer, 0, 0);
+    runner.sendCommand(command, data);
+    Atomics.wait(runner.iobuffer, 0, 0);
+    return runner.iobuffer[1];
+  }
+
   const sendReadByte = (size: number) => {
     sendFileCommand("readbyte", {fileId: currentFile, size})
   }
@@ -296,6 +303,34 @@ export function createImports(runner: Runner): Object {
         const source = getString(sourceAddr);
         return source.indexOf(substr) + 1;
       }
+    },
+
+    crt: {
+      $clrscr: () => {
+        runner.sendCommand("clrscr");
+      },
+      $cursoron: () => {
+        // do nothing
+      },
+      $cursoroff: () => {
+        // do nothing
+      },
+
+      $gotoxy: (x: number, y: number) => {
+        runner.sendCommand("gotoxy", {x, y});
+      },
+
+      $wherex: (): number => {
+        return requestValue("wherex");
+      },
+
+      $wherey: (): number => {
+        return requestValue("wherey");
+      },
+
+      $readkey: (): number => {
+        return requestValue("readkey");
+      },
     }
   };
 

@@ -19,7 +19,7 @@ export class Parser {
   loopLevel: number;
   stringLiterals: StringTable;
   functionId: number;
-  libraryUsed: string[];
+  libraryUsed: Set<string>;
 
   constructor(public text: string, logger?: ErrLogger.Reporter) {
     this.precedenceRule = this.buildPrecedence();
@@ -33,7 +33,7 @@ export class Parser {
     this.loopLevel = 0;
     this.functionId = 1;
     this.stringLiterals = new Map();
-    this.libraryUsed = ["rtl"];
+    this.libraryUsed = new Set(["rtl"]);
   }
 
   parse(): Program | undefined  {
@@ -72,6 +72,7 @@ export class Parser {
   private declarations() {
     while(!this.check(TokenTag.BEGIN)) {
       switch(this.current.tag) {
+        case TokenTag.USES: this.usesDecl(); break;
         case TokenTag.CONST: this.constPart(); break;
         case TokenTag.VAR: this.varPart(); break;
         case TokenTag.TYPE: this.typeDefPart(); break;
@@ -85,6 +86,19 @@ export class Parser {
       }
       // TODO: sync declaration errors
     }
+  }
+
+  private usesDecl() {
+    this.advance();
+    do {
+      const libname = this.consume(TokenTag.IDENTIFIER, "Expect identifier.").lexeme;
+      if (!Runtime.hasLibrary(libname)) {
+        throw this.errorAtPrevious(`Unknown external library ${libname}`);
+      }
+      this.libraryUsed.add(libname);
+    } while(this.match(TokenTag.COMMA));
+
+    this.consume(TokenTag.SEMICOLON, "Expect ';'.");
   }
 
   private constPart() {
