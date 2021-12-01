@@ -32,7 +32,7 @@ function runFile(filename) {
   const compileTime = "Compiled in";
   console.time(compileTime)
 
-  const binary = compile(data, console, optimize);
+  const binary = compile(data, console, optimize, debugWasm);
   if (!binary) return;
 
   console.timeEnd(compileTime);

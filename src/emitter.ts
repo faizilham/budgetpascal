@@ -46,18 +46,18 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     this.fileId = 0;
   }
 
-  emit(optimize: boolean = true): Uint8Array {
-    this.buildProgram(optimize);
+  emit(optimize: boolean = true, debug: boolean = false): Uint8Array {
+    this.buildProgram(optimize, debug);
     return this.wasm.emitBinary();
   }
 
-  private buildProgram(optimize: boolean) {
+  private buildProgram(optimize: boolean, debug: boolean) {
     // init module
     if (!this.program.body) {
       throw new Error("Panic: null program body");
     }
 
-    // binaryen.setDebugInfo(true);
+    if (debug) binaryen.setDebugInfo(true);
 
     this.buildMemory();
     this.runtime.buildStack();
@@ -194,7 +194,11 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
 
     const size = sizeOf(variable.type);
-    const address = this.runtime.stackTop();
+    this.currentBlock.push(
+      this.runtime.pushStack(size)
+    );
+
+    const address = this.wasm.i32.sub(this.runtime.stackTop(), this.wasm.i32.const(size));
 
     if (variable.paramVar) {
       // store argument to memory
@@ -211,20 +215,21 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     }
 
     this.updateOffset(variable, size);
-
-    this.currentBlock.push(
-      this.runtime.pushStack(size)
-    );
   }
 
   private addMemoryStoredVar(variable: VariableEntry, obj: MemoryType) {
-    let address = this.runtime.stackTop()
 
     if (variable.returnVar) {
-      address = this.wasm.i32.sub(this.runtime.callframeStackTop(), this.wasm.i32.const(obj.bytesize));
+      const address = this.wasm.i32.sub(this.runtime.callframeStackTop(), this.wasm.i32.const(obj.bytesize));
       this.currentBlock.push(this.wasm.local.set(variable.index, address));
       return;
     }
+
+    this.currentBlock.push(
+      this.runtime.pushStack(obj.bytesize)
+    );
+
+    const address = () => this.wasm.i32.sub(this.runtime.stackTop(), this.wasm.i32.const(obj.bytesize));
 
     if (variable.paramVar) {
       const paramValue = this.wasm.local.get(variable.index, binaryen.i32);
@@ -232,26 +237,23 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
       if (isString(obj as PascalType)) {
         const str = obj as StringType;
         this.currentBlock.push(
-          this.runtime.copyString(this.runtime.stackTop(), str.size, paramValue)
+          this.runtime.copyString(address(), str.size, paramValue)
         );
       } else {
         this.currentBlock.push(
-          this.wasm.memory.copy(this.runtime.stackTop(), paramValue, this.wasm.i32.const(obj.bytesize))
+          this.wasm.memory.copy(address(), paramValue, this.wasm.i32.const(obj.bytesize))
         );
       }
     } else if (isArrayType(obj)) {
       this.currentBlock.push(
-        this.wasm.i32.store(0, 1, this.runtime.stackTop(), this.wasm.i32.const(obj.length))
+        this.wasm.i32.store(0, 1, address(), this.wasm.i32.const(obj.length))
       );
     }
 
     // set address
-    this.currentBlock.push(this.wasm.local.set(variable.index, address));
+    this.currentBlock.push(this.wasm.local.set(variable.index, address()));
 
     this.updateOffset(variable, obj.bytesize);
-    this.currentBlock.push(
-      this.runtime.pushStack(obj.bytesize)
-    );
   }
 
   private updateOffset(variable: VariableEntry, size: number) {

@@ -21,6 +21,9 @@ export class MockConsole {
     const lines = this.lines;
     return {
       rtl: {
+        $updatemem: (result: number) =>{
+          // should be safe to do nothing for test
+        },
         $putint: (n: number, mode: number) => {
           switch(mode) {
             case 1: currentline.push(String.fromCharCode(n)); break;
