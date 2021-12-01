@@ -126,7 +126,10 @@ export function runCode(binary, terminal, files) {
       }
 
       case "readkey": {
-
+        terminal.readKey().then((value) => {
+          iobuffer[1] = value;
+          notifyResult(1);
+        })
         break;
       }
     }

@@ -1,5 +1,8 @@
 import {Terminal} from "xterm";
 import ansi from 'ansi-escapes';
+import {SpecialKeys, PascalSpecialKeys} from "../src/keyboard_map";
+
+const ESCAPE_KEY = 0x1b;
 
 type ResolveFunc = ((result: string|null) => void);
 
@@ -10,6 +13,7 @@ export class TerminalUI {
   private readResolver: ResolveFunc | null;
   private readline: string;
   private readcursor: number;
+  private readkeyActive: boolean;
 
   constructor(container: HTMLElement) {
     this.terminal = new Terminal({
@@ -20,6 +24,7 @@ export class TerminalUI {
 
     this.cursorShown = false;
     this.readlineActive = false;
+    this.readkeyActive = false;
 
     this.readResolver = null;
     this.readline = "";
@@ -28,6 +33,17 @@ export class TerminalUI {
     this.terminal.onData((data) => this.handleData(data));
 
     this.terminal.open(container);
+  }
+
+  private startReadkey() {
+    this.readkeyActive = true;
+    return new Promise<string|null>((resolve) => {
+      this.readResolver = resolve;
+    })
+  }
+
+  private handleKey(key: string) {
+    (this.readResolver as ResolveFunc)(key);
   }
 
   private startRead() {
@@ -122,11 +138,12 @@ export class TerminalUI {
   }
 
   private handleData(data: string) {
+    if (this.readkeyActive) return this.handleKey(data);
     if (!this.readlineActive) return;
 
     const ord = data.charCodeAt(0);
 
-    if (ord === 0x1b) { // handle ansi sequence
+    if (ord === ESCAPE_KEY) { // handle ansi sequence
       switch(data.substring(1)) {
         case "[D": // Left Arrow
           this.moveReadCursor(-1);
@@ -205,6 +222,23 @@ export class TerminalUI {
     this.write(data + "\n");
   }
 
+  async readKey() {
+    const result = await this.startReadkey();
+    if (!result) return 0;
+    let code = result.charCodeAt(0);
+
+    if (code === ESCAPE_KEY) {
+      const mapping = SpecialKeyMapping[result.substring(1)];
+      if (mapping != null) {
+        code = PascalSpecialKeys[mapping];
+      } else {
+        code = 0;
+      }
+    }
+
+    return code;
+  }
+
   async readToBuffer(iobuffer: Int32Array) {
     this.showCursor(true);
     let input = await this.startRead();
@@ -225,4 +259,29 @@ export class TerminalUI {
     Atomics.store(iobuffer, 0, 1);
     Atomics.notify(iobuffer, 0, 1);
   }
+}
+
+const SpecialKeyMapping: {[key: string]: SpecialKeys} = {
+  "OP": SpecialKeys.F1,
+  "OQ": SpecialKeys.F2,
+  "OR": SpecialKeys.F3,
+  "OS": SpecialKeys.F4,
+  "[15~": SpecialKeys.F5,
+  "[17~": SpecialKeys.F6,
+  "[18~": SpecialKeys.F7,
+  "[19~": SpecialKeys.F8,
+  "[20~": SpecialKeys.F9,
+  "[21~": SpecialKeys.F10,
+  "[23~": SpecialKeys.F11,
+  "[24~": SpecialKeys.F12,
+  "[H": SpecialKeys.HOME,
+  "[A": SpecialKeys.UP,
+  "[5~": SpecialKeys.PAGEUP,
+  "[D": SpecialKeys.LEFT,
+  "[C": SpecialKeys.RIGHT,
+  "[F": SpecialKeys.END,
+  "[B": SpecialKeys.DOWN,
+  "[6~": SpecialKeys.PAGEDOWN,
+  "[2~": SpecialKeys.INS,
+  "[3~": SpecialKeys.DEL,
 }
