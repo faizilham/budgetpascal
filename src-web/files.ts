@@ -1,7 +1,13 @@
+export type FileMap = {[key:string]: Uint8Array};
+
 export class Files {
-  files: {[key: string]: Uint8Array}
+  files: FileMap
   constructor(initialFiles = {}) {
     this.files = initialFiles;
+  }
+
+  setFiles(files: FileMap) {
+    this.files = files;
   }
 
   read(filename: string): Uint8Array | null {

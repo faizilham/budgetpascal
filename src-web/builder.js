@@ -5,6 +5,11 @@ const cache = {
   binary: null
 }
 
+export function setCache(code, binary) {
+  cache.code = code;
+  cache.binary = binary;
+}
+
 export function compileCode(code, terminal, cached = true) {
   if (cached && code === cache.code) {
     return Promise.resolve(cache.binary);
@@ -27,8 +32,7 @@ export function compileCode(code, terminal, cached = true) {
         let binary = message.data;
 
         if (binary) {
-          cache.code = code;
-          cache.binary = binary;
+          setCache(code, binary);
         }
 
         resolver(binary);

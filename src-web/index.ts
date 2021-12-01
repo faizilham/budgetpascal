@@ -1,4 +1,4 @@
-import { compileCode, runCode } from "./builder";
+import { compileCode, runCode, setCache } from "./builder";
 
 import "xterm/css/xterm.css";
 
@@ -9,12 +9,15 @@ import "codemirror/mode/pascal/pascal.js";
 import "./style/main.scss"
 import { TerminalUI } from "./terminal_ui";
 import { Files } from "./files";
+import { demoNames, fetchDemo } from "./demos";
 
 function init() {
   const editor = createEditor();
   const terminal = createTerminal();
   const files = new Files();
   initCompileButton(editor, terminal, files);
+
+  loadDemo("hangman", editor, files);
 };
 
 function createEditor() {
@@ -53,6 +56,17 @@ function initCompileButton(editor: CodeMirror.Editor, terminal: TerminalUI, file
       compileButton.removeAttribute("disabled");
     }
   })
+}
+
+async function loadDemo(name: string, editor: CodeMirror.Editor, files: Files) {
+  const data = await fetchDemo(name);
+  if (!data) return;
+
+  editor.setValue(data.code);
+  files.setFiles(data.files);
+  if (data.binary) {
+    setCache(data.code, data.binary);
+  }
 }
 
 init();
