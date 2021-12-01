@@ -39,13 +39,13 @@ function createTerminal() {
 function initCompileButton(editor: CodeMirror.Editor, terminal: TerminalUI, files: Files) {
   const compileButton = document.getElementById("btn-compile") as HTMLElement;
 
-  compileButton.addEventListener("click", () => {
+  compileButton.addEventListener("click", async () => {
     const code = editor.getValue();
     compileButton.setAttribute("disabled", "true");
     terminal.clear();
 
     try {
-      const binary = compileCode(code, terminal);
+      const binary = await compileCode(code, terminal);
       if (!binary) return;
       runCode(binary, terminal, files);
 

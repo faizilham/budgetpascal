@@ -1,4 +1,3 @@
-import {compile} from "../src/";
 import { FileHandler } from "../src/file_handler";
 
 const cache = {
@@ -7,28 +6,40 @@ const cache = {
 }
 
 export function compileCode(code, terminal, cached = true) {
-  const logger = {
-    error(...messages) {
-      const data = messages.join(" ");
-      terminal.writeln(data);
-    }
-  }
-
-  let binary;
   if (cached && code === cache.code) {
-    binary = cache.binary;
-  } else {
-    terminal.writeln("Compiling...");
-    binary = compile(code, logger);
-
-    if (binary) {
-      cache.code = code;
-      cache.binary = binary;
-    }
+    return Promise.resolve(cache.binary);
   }
 
+  let resolver;
+  let promise = new Promise((resolve) => {
+    resolver = resolve;
+  });
 
-  return binary;
+  terminal.writeln("Loading compiler...");
+
+  const worker = new Worker(new URL('compile.js', import.meta.url), {type: "module"});
+  worker.addEventListener('message', (event) => {
+    const message = event.data;
+
+    switch(message.command) {
+      case "log": terminal.writeln(message.data); break;
+      case "finish": {
+        let binary = message.data;
+
+        if (binary) {
+          cache.code = code;
+          cache.binary = binary;
+        }
+
+        resolver(binary);
+        break;
+      }
+    }
+  });
+
+  worker.postMessage(code);
+
+  return promise;
 }
 
 export function runCode(binary, terminal, files) {
