@@ -108,6 +108,11 @@ export function runCode(binary, terminal, files) {
         break;
       }
 
+      case "delay": {
+        setTimeout(() => notifyResult(1), message.data.value);
+        break;
+      }
+
       case "gotoxy": {
         terminal.gotoXY(message.data.x, message.data.y);
         break;

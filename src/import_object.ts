@@ -60,6 +60,15 @@ export function createImports(runner: Runner): Object {
     return decoder.decode(runner.memory.slice(start, end));
   }
 
+  const setString = (addr: number, maxSize: number, str: string) => {
+    const length = Math.min(str.length, maxSize);
+    runner.memory[addr] = length;
+
+    for (let i = 0; i < length; i++) {
+      runner.memory[addr + i + 1] = str.charCodeAt(i);
+    }
+  }
+
   const padded = (str: string, spacing: number): string => {
     let padSize = spacing - str.length;
     if (padSize < 1) return str;
@@ -77,7 +86,7 @@ export function createImports(runner: Runner): Object {
     }
   }
 
-  const requestValue = (command: string, data?: any): number => {
+  const waitFor = (command: string, data?: any): number => {
     Atomics.store(runner.iobuffer, 0, 0);
     runner.sendCommand(command, data);
     Atomics.wait(runner.iobuffer, 0, 0);
@@ -298,11 +307,51 @@ export function createImports(runner: Runner): Object {
         return runner.iobuffer[2] !== 0;
       },
 
+      /* Strings */
+
       $pos: (substrAddr: number, sourceAddr: number): number => {
         const substr = getString(substrAddr);
         const source = getString(sourceAddr);
         return source.indexOf(substr) + 1;
-      }
+      },
+
+      $upcase: (target: number, maxSize: number, source: number) => {
+        const str = getString(source);
+        setString(target, maxSize - 1, str.toUpperCase());
+        return target;
+      },
+
+      $copy: (target: number, maxSize: number, source: number, start: number, length: number) => {
+        let str = getString(source);
+        start = start - 1;
+        if (start < 0) start = 0;
+        str = str.substring(start, start + length);
+        setString(target, maxSize - 1, str);
+        return target;
+      },
+
+      $delete: (source: number, start: number, length: number) => {
+        let str = getString(source);
+        let maxSize = str.length;
+
+        start = start - 1;
+        if (start < 0) start = 0;
+        str = str.substring(0, start) + str.substring(start + length);
+        setString(source, maxSize, str);
+      },
+
+      /* Others */
+      $randomize: () => {
+        // do nothing
+      },
+
+      $random: () => {
+        return Math.random();
+      },
+
+      $randomint: (max: number) => {
+        return Math.floor(Math.random() * max);
+      },
     },
 
     crt: {
@@ -316,20 +365,24 @@ export function createImports(runner: Runner): Object {
         // do nothing
       },
 
+      $delay: (value: number) => {
+        waitFor("delay", {value});
+      },
+
       $gotoxy: (x: number, y: number) => {
         runner.sendCommand("gotoxy", {x, y});
       },
 
       $wherex: (): number => {
-        return requestValue("wherex");
+        return waitFor("wherex");
       },
 
       $wherey: (): number => {
-        return requestValue("wherey");
+        return waitFor("wherey");
       },
 
       $readkey: (): number => {
-        return requestValue("readkey");
+        return waitFor("readkey");
       },
     }
   };

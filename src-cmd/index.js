@@ -163,6 +163,11 @@ function runFile(filename) {
         filehandler.close(message.data.fileId).then(notifyResult);
         break;
       }
+
+      case "delay": {
+        setTimeout(() => notifyResult(1), message.data.value);
+        break;
+      }
     }
   });
 

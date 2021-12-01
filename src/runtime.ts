@@ -533,7 +533,26 @@ export class RuntimeBuilder {
       libfunc.built = true;
     }
 
-    return this.wasm.call(libfunc.name, operands, getBinaryenType(libfunc.returnType))
+    let call;
+
+    if (Types.isMemoryType(libfunc.returnType)) {
+      // return of memory types will need targetAddress and maxSize
+      operands.unshift(
+        this.wasm.i32.sub(this.stackTop(), this.wasm.i32.const(libfunc.returnType.bytesize)),
+        this.wasm.i32.const(libfunc.returnType.bytesize)
+      );
+
+      const returnType = getBinaryenType(libfunc.returnType);
+
+      call = this.wasm.block("", [
+        this.pushStack(libfunc.returnType.bytesize),
+        this.wasm.call(libfunc.name, operands, returnType)
+      ], returnType);
+    } else {
+      call = this.wasm.call(libfunc.name, operands, getBinaryenType(libfunc.returnType));
+    }
+
+    return call;
   }
 }
 
@@ -616,11 +635,19 @@ const importFunctions: {[key: string]: [number, number]} = {
 
   /* rtl */
   "rtl.$pos": [params(binaryen.i32, binaryen.i32), binaryen.i32],
+  "rtl.$upcase": [params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.i32],
+  "rtl.$copy": [params(binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32, binaryen.i32), binaryen.i32],
+  "rtl.$delete": [params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.none],
+
+  "rtl.$randomize": [binaryen.none, binaryen.none],
+  "rtl.$randomint": [binaryen.i32, binaryen.i32],
+  "rtl.$random": [binaryen.none, binaryen.f64],
 
   /* crt */
   "crt.$clrscr": [binaryen.none, binaryen.none],
   "crt.$cursoron": [binaryen.none, binaryen.none],
   "crt.$cursoroff": [binaryen.none, binaryen.none],
+  "crt.$delay": [binaryen.i32, binaryen.none],
   "crt.$gotoxy": [params(binaryen.i32, binaryen.i32), binaryen.none],
   "crt.$wherex": [binaryen.none, binaryen.i32],
   "crt.$wherey": [binaryen.none, binaryen.i32],
@@ -629,15 +656,6 @@ const importFunctions: {[key: string]: [number, number]} = {
 
 function rtl(): Runtime.Library {
   return {
-    "length": [
-      new LibraryFunction("rtl.$lenstr", Types.BaseType.Integer, [Types.StringType.default], lenstr),
-      new LibraryFunction("rtl.$lenarr", Types.BaseType.Integer, [Types.isArrayType], lenarr),
-    ],
-    "pos": [
-      new LibraryFunction("rtl.$posc", Types.BaseType.Integer, [Types.BaseType.Char, Types.StringType.default], posc),
-      new LibraryFunction("rtl.$pos", Types.BaseType.Integer, [Types.StringType.default, Types.StringType.default], null),
-    ],
-
     // files
     "assign":[
       new LibraryFunction("rtl.$assign", Types.BaseType.Void, [Types.isFile, Types.StringType.default], null)
@@ -654,6 +672,34 @@ function rtl(): Runtime.Library {
     "eof":[
       new LibraryFunction("rtl.$eof", Types.BaseType.Boolean, [Types.isFile], null)
     ],
+
+    // strings
+    "length": [
+      new LibraryFunction("rtl.$lenstr", Types.BaseType.Integer, [Types.StringType.default], lenstr),
+      new LibraryFunction("rtl.$lenarr", Types.BaseType.Integer, [Types.isArrayType], lenarr),
+    ],
+    "pos": [
+      new LibraryFunction("rtl.$posc", Types.BaseType.Integer, [Types.BaseType.Char, Types.StringType.default], posc),
+      new LibraryFunction("rtl.$pos", Types.BaseType.Integer, [Types.StringType.default, Types.StringType.default], null),
+    ],
+    "upcase": [
+      new LibraryFunction("rtl.$upcaseChr", Types.BaseType.Char, [Types.BaseType.Char], upcaseChr),
+      new LibraryFunction("rtl.$upcase", Types.StringType.default, [Types.StringType.default], null),
+    ],
+    "copy": [
+      new LibraryFunction("rtl.$copy", Types.StringType.default, [Types.StringType.default, Types.BaseType.Integer, Types.BaseType.Integer], null)
+    ],
+    "delete": [
+      new LibraryFunction("rtl.$delete", Types.BaseType.Void, [Types.StringType.default, Types.BaseType.Integer, Types.BaseType.Integer], null)
+    ],
+
+    // others
+
+    "randomize": [new LibraryFunction("rtl.$randomize", Types.BaseType.Void, [], null) ],
+    "random": [
+      new LibraryFunction("rtl.$randomint", Types.BaseType.Integer, [Types.BaseType.Integer], null),
+      new LibraryFunction("rtl.$random", Types.BaseType.Real, [], null),
+    ],
   }
 }
 
@@ -662,6 +708,7 @@ function crt(): Runtime.Library {
     "clrscr": [new LibraryFunction("crt.$clrscr", Types.BaseType.Void, [], null)],
     "cursoron": [new LibraryFunction("crt.$cursoron", Types.BaseType.Void, [], null)],
     "cursoroff": [new LibraryFunction("crt.$cursoroff", Types.BaseType.Void, [], null)],
+    "delay": [new LibraryFunction("crt.$delay", Types.BaseType.Void, [Types.BaseType.Integer], null)],
     "gotoxy": [new LibraryFunction("crt.$gotoxy", Types.BaseType.Void, [Types.BaseType.Integer, Types.BaseType.Integer], null)],
     "wherex": [new LibraryFunction("crt.$wherex", Types.BaseType.Integer, [], null)],
     "wherey": [new LibraryFunction("crt.$wherey", Types.BaseType.Integer, [], null)],
@@ -743,4 +790,24 @@ function posc(wasm: binaryen.Module, libfunc: LibraryFunction) {
         wasm.br(loopblock)
       ]))
     ]));
+}
+
+function upcaseChr(wasm: binaryen.Module, libfunc: LibraryFunction) {
+  // params: chr = 0;
+
+  const chr = 0;
+  const resultType = binaryen.i32;
+
+  const getchar = () => wasm.local.get(chr, binaryen.i32);
+  const constant = (n: number) => wasm.i32.const(n);
+  wasm.addFunction(libfunc.name, binaryen.i32, resultType, [],
+    wasm.if(
+      wasm.i32.and(
+        wasm.i32.le_s(constant(97), getchar()),
+        wasm.i32.le_s(getchar(), constant(122))
+      ),
+      wasm.return(wasm.i32.sub(getchar(), constant(32))),
+      wasm.return(getchar())
+    )
+  );
 }
