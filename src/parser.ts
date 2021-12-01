@@ -1,6 +1,6 @@
 import { ErrLogger, ParserError, UnreachableErr } from "./errors";
 import { Expr, Stmt, WriteFormat } from "./ast";
-import { ArrayType, BaseType, FileType, getTypeName, isBaseType, isBool, isFile, isFileOf, isMemoryType, isNumberType, isOrdinal, isPointer, isPointerTo, isRecord, isString, isStringLike, isTextFile, isTypeEqual, PascalType, Pointer, RecordType, StringType } from "./types"
+import { ArrayType, BaseType, FileType, getTypeName, isArrayType, isBaseType, isBool, isFile, isFileOf, isMemoryType, isNumberType, isOrdinal, isPointer, isPointerTo, isRecord, isString, isStringLike, isTextFile, isTypeEqual, PascalType, Pointer, RecordType, StringType } from "./types"
 import { IdentifierType, ParamType, Program, Routine, StringTable, Subroutine, VariableEntry, VariableLevel } from "./routine";
 import { Scanner, Token, TokenTag } from "./scanner";
 import { LibraryFunction, Runtime } from "./runtime";
@@ -1275,7 +1275,7 @@ export class Parser {
     let indexerExpr = left;
     for (let i = 0; i < indexes.length; i++) {
       const index = indexes[i];
-      if (!(indexerExpr.type instanceof ArrayType)) {
+      if (!isArrayType(indexerExpr.type) && !isString(indexerExpr.type)) {
         throw this.errorAt(indexTokens[i], `Invalid operator[] for type ${getTypeName(indexerExpr.type)}`);
       }
 

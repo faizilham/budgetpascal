@@ -15,6 +15,7 @@ var
   i: integer;
   str: string[5];
   arr3: array[four..seven] of integer;
+  arrstr: array[1..2] of string[5];
 
   procedure printArray(const arr: int6);
   var i: integer;
@@ -119,4 +120,7 @@ begin
   end;
 
   writeln(arr3[4], arr3[5], arr3[6], arr3[7]);
+
+  arrstr[1] := 'world';
+  writeln(arrstr[1,1], arrstr[1][5]);
 end.
