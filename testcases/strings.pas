@@ -1,8 +1,10 @@
 program strings;
 
+const eleven = 11;
+
 var
   a: string[7];
-  b: string[11];
+  b: string[eleven];
   c: string;
 
 const

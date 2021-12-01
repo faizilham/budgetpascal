@@ -211,13 +211,19 @@ export class Parser {
     let length = 255;
 
     if (this.match(TokenTag.LEFT_SQUARE)) {
-      this.consume(TokenTag.INTEGER, "Expect string length");
-      let intLiteral = this.previous;
-      length = intLiteral.literal as number;
+      const lengthToken = this.current;
+      const lengthExpr = this.expression();
+
+      if (lengthExpr.type !== BaseType.Integer || !(lengthExpr instanceof Expr.Literal)) {
+        throw this.errorAt(lengthToken, "Expect integer literal or constant for string length");
+      }
+
+      length = lengthExpr.literal;
+
       this.consume(TokenTag.RIGHT_SQUARE, "Expect ']'.");
 
       if (length > 255) {
-        throw this.errorAt(intLiteral, "String size can't be larger than 255.");
+        throw this.errorAt(lengthToken, "String size can't be larger than 255.");
       }
     }
 
