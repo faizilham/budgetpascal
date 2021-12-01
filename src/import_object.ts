@@ -184,12 +184,16 @@ export function createImports(runner: Runner): Object {
         if (linebuffer.length < 1) {
           requestReadline();
         }
+
         const newline = linebuffer.indexOf("\n");
         let str = "";
 
         if (newline >= 0) {
           str = linebuffer.slice(0, newline);
           linebuffer = linebuffer.slice(newline);
+        } else {
+          str = linebuffer;
+          linebuffer = "";
         }
 
         if (str.length > maxsize) {

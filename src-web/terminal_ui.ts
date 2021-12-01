@@ -43,6 +43,7 @@ export class TerminalUI {
   }
 
   private handleKey(key: string) {
+    this.readkeyActive = false;
     (this.readResolver as ResolveFunc)(key);
   }
 
