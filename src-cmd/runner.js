@@ -9,11 +9,12 @@ const sendCommand = (command, data = undefined) => {
 }
 
 const runner = {
-  iobuffer, sendCommand, memory: null
+  iobuffer, sendCommand, memory: null, instance: null
 };
 
 const importObject = createImports(runner);
 
 const instance = new WebAssembly.Instance(mod, importObject);
+runner.instance = instance;
 runner.memory = new Uint8Array(instance.exports.mem.buffer);
 instance.exports.main();

@@ -9,7 +9,7 @@ const printToTerminal = (value) => {
 }
 
 const runner = {
-  iobuffer: null, sendCommand, memory: null
+  iobuffer: null, sendCommand, memory: null, instance: null
 };
 
 const importObject = createImports(runner);
@@ -17,6 +17,7 @@ const importObject = createImports(runner);
 function run(iobuffer, wasmModule) {
   runner.iobuffer = iobuffer;
   const instance = new WebAssembly.Instance(wasmModule, importObject);
+  runner.instance = instance;
   runner.memory = new Uint8Array(instance.exports.mem.buffer);
   try {
     instance.exports.main();

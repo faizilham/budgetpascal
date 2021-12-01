@@ -4,7 +4,8 @@ type SendCommand = (command: string, data?: any) => void;
 interface Runner {
   iobuffer: Int32Array,
   memory: Uint8Array,
-  sendCommand: SendCommand
+  sendCommand: SendCommand,
+  instance: WebAssembly.Instance
 }
 
 export class InterruptRuntime extends Error {}
@@ -99,6 +100,15 @@ export function createImports(runner: Runner): Object {
 
   const importObject = {
     rtl: {
+      $updatemem: (growResult: number) => {
+        if (growResult < 0) {
+          throw new RuntimeError("Out of memory");
+        }
+
+        const exports: any = runner.instance.exports;
+        runner.memory = new Uint8Array(exports.mem.buffer);
+      },
+
       $putint: (n: number, mode: number, spacing: number) => {
         let str;
         switch(mode) {

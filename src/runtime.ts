@@ -3,12 +3,16 @@ import * as Types from "./types";
 
 export namespace Runtime {
   export const DATA_ADDRESS = 0;
-  export const BASE_FRAME_POINTER = 65536;
+  export const PAGE_SIZE = 65536;
+  export const MAX_PAGE = 64;
+  export const BASE_FRAME_POINTER = Runtime.PAGE_SIZE;
   export const MAX_FRAME = 256;
   export const BASE_STACK_ADDRESS = Runtime.BASE_FRAME_POINTER + Runtime.MAX_FRAME * 4;
 
   export const STACK_POINTER = "@sp";
   export const FRAME_POINTER = "@fp";
+  export const MEM_SIZE = "@size";
+  export const NUM_PAGE = "@page";
 
   export const PUTINT_MODE_INT = 0;
   export const PUTINT_MODE_CHAR = 1;
@@ -26,6 +30,11 @@ export class RuntimeBuilder {
       this.wasm.i32.const(Runtime.BASE_STACK_ADDRESS));
     this.wasm.addGlobal(Runtime.FRAME_POINTER, binaryen.i32, true,
       this.wasm.i32.const(Runtime.BASE_FRAME_POINTER));
+
+    this.wasm.addGlobal(Runtime.MEM_SIZE, binaryen.i32, true,
+      this.wasm.i32.const(Runtime.PAGE_SIZE * 2));
+    this.wasm.addGlobal(Runtime.NUM_PAGE, binaryen.i32, true,
+      this.wasm.i32.const(2));
 
     this.wasm.setFeatures(binaryen.Features.BulkMemory | binaryen.Features.Multivalue);
 
@@ -57,15 +66,85 @@ export class RuntimeBuilder {
   }
 
   private buildPush() {
-    this.wasm.addFunction("$push", binaryen.i32, binaryen.none, [],
+    const bytes = 0;
+    const doublePage = 1;
+    const targetSize = 2;
+
+    const SP = Runtime.STACK_POINTER;
+    const MEMSIZE = Runtime.MEM_SIZE;
+    const PAGE = Runtime.NUM_PAGE;
+
+    const getGlobal = (name: string) => this.wasm.global.get(name, binaryen.i32);
+    const getLocal = (variable: number) => this.wasm.local.get(variable, binaryen.i32);
+    const constant = (n: number) => this.wasm.i32.const(n);
+
+    this.wasm.addFunction("$push", binaryen.i32, binaryen.none, [binaryen.i32, binaryen.i32], this.wasm.block("", [
+      // SP += bytes
       this.wasm.global.set(
-        Runtime.STACK_POINTER,
+        SP,
         this.wasm.i32.add(
-          this.wasm.global.get(Runtime.STACK_POINTER, binaryen.i32),
-          this.wasm.local.get(0, binaryen.i32)
+          getGlobal(SP),
+          this.wasm.local.get(bytes, binaryen.i32)
         )
-      )
-    );
+      ),
+
+      // if SP <= MEMSIZE: return
+      this.wasm.if(
+        this.wasm.i32.le_s(getGlobal(SP), getGlobal(MEMSIZE)),
+        this.wasm.return()
+      ),
+
+      // doublePage = page * 2
+      this.wasm.local.set(
+        doublePage,
+        this.wasm.i32.mul(getGlobal(PAGE), constant(2))
+      ),
+
+      // targetSize = sp / page_size + 1
+      this.wasm.local.set(
+        targetSize,
+        this.wasm.i32.add(
+          this.wasm.i32.div_s(getGlobal(SP), constant(Runtime.PAGE_SIZE)),
+          constant(1)
+        )
+      ),
+
+      // targetSize = max(targetSize, doublePage)
+      this.wasm.if(
+        this.wasm.i32.gt_s(getLocal(doublePage), getLocal(targetSize)),
+        this.wasm.local.set(
+          targetSize,
+          getLocal(doublePage)
+        )
+      ),
+
+      // targetSize = min(targetSize, max_page)
+      this.wasm.if(
+        this.wasm.i32.gt_s(getLocal(targetSize), constant(Runtime.MAX_PAGE)),
+        this.wasm.local.set(
+          targetSize,
+          constant(Runtime.MAX_PAGE)
+        )
+      ),
+
+      // growMemory(targetSize - page)
+      this.growMemory(this.wasm.i32.sub(
+        getLocal(targetSize),
+        getGlobal(PAGE)
+      )),
+
+      // page = targetSize
+      this.wasm.global.set(PAGE, getLocal(targetSize)),
+
+      // memsize = targetSize * page_size
+      this.wasm.global.set(MEMSIZE, this.wasm.i32.mul(getLocal(targetSize), constant(Runtime.PAGE_SIZE))),
+    ]));
+  }
+
+  private growMemory(deltaSize: number): number {
+    this.importsUsed.add("rtl.$updatemem");
+    const growmem = this.wasm.memory.grow(deltaSize);
+    return this.wasm.call("rtl.$updatemem", [growmem], binaryen.none);
   }
 
   popStack(bytes: number): number {
@@ -582,10 +661,12 @@ type BuilderFunc = (wasm: binaryen.Module, libfunc: LibraryFunction) => void;
 
 export namespace Runtime {
   export type Library = {[key: string]: LibraryFunction[]};
-  const library: {[key: string]: Library} = {
-    "rtl": rtl(),
-    "crt": crt()
-  };
+  let library: {[key: string]: Library} = {}
+
+  export function initLibrary() {
+    library["rtl"] = rtl();
+    library["crt"] = crt();
+  }
 
   export function hasLibrary(libname: string): boolean {
     return library[libname] != null;
@@ -604,6 +685,7 @@ export namespace Runtime {
 }
 
 const importFunctions: {[key: string]: [number, number]} = {
+  "rtl.$updatemem": [binaryen.i32, binaryen.none],
   "rtl.$putint": [params(binaryen.i32, binaryen.i32, binaryen.i32), binaryen.none],
   "rtl.$putreal": [params(binaryen.f64, binaryen.i32, binaryen.i32), binaryen.none],
   "rtl.$putln": [binaryen.none, binaryen.none],

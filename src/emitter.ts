@@ -91,7 +91,7 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
 
   private buildMemory() {
     const segments = this.buildStrings();
-    this.wasm.setMemory(2, 64, "mem", segments); // 64 page = 4MB
+    this.wasm.setMemory(2, Runtime.MAX_PAGE, "mem", segments);
   }
 
   private buildStrings(): MemorySegment[] {

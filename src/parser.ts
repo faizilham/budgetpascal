@@ -34,6 +34,7 @@ export class Parser {
     this.functionId = 1;
     this.stringLiterals = new Map();
     this.libraryUsed = new Set(["rtl"]);
+    Runtime.initLibrary();
   }
 
   parse(): Program | undefined  {

@@ -15,7 +15,6 @@ if (!process.argv[2]){
 }
 
 let filename = process.argv[2];
-runFile(filename);
 
 if (process.argv[3] === "--test") {
   debugWasm = false;
@@ -24,6 +23,8 @@ if (process.argv[3] === "--test") {
   debugWasm = true;
   optimize = false;
 }
+
+runFile(filename);
 
 function runFile(filename) {
   const data = fs.readFileSync(filename).toString();
