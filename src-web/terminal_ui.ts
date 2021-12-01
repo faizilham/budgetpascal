@@ -44,6 +44,11 @@ export class TerminalUI {
 
   private handleKey(key: string) {
     this.readkeyActive = false;
+
+    if (key === '\r' || key === '\n') {
+      this.terminal.write(ansi.cursorDown(1));
+    }
+
     (this.readResolver as ResolveFunc)(key);
   }
 
@@ -248,7 +253,8 @@ export class TerminalUI {
     if (input == null) {
       iobuffer[1] = -1;
     } else {
-      input += "\n";
+      input = input.replace(/\r\n$/, "\n");
+
       const length = input.length;
       iobuffer[1] = length;
 

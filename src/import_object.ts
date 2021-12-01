@@ -17,8 +17,11 @@ export class RuntimeError extends Error {
 
 export function createImports(runner: Runner): Object {
   let linebuffer = "";
+  let consoleLineBuffer = "";
+  let fileLineBuffer: {[key: number]: string} = {}
   const decoder = new TextDecoder();
   let currentFile = -1;
+
 
   const requestReadline = () => {
 
@@ -200,6 +203,9 @@ export function createImports(runner: Runner): Object {
           str = str.slice(0, maxsize);
         }
 
+        // console.log(str, str.endsWith("\n"), str.length);
+        // console.log(linebuffer, linebuffer.endsWith("\n"), linebuffer.length);
+
         runner.memory[addr] = str.length;
         for (let i = 0; i < str.length; i++) {
           runner.memory[addr + 1 + i] = str.charCodeAt(i);
@@ -215,15 +221,21 @@ export function createImports(runner: Runner): Object {
         if (newline >= 0) {
           linebuffer = linebuffer.slice(newline+1);
         }
+
+        // console.log("ln", newline, linebuffer.length);
       },
 
       /* Files */
 
       $fset: (id: number) => {
         currentFile = id;
+        consoleLineBuffer = linebuffer;
+        linebuffer = fileLineBuffer[id];
       },
 
       $funset: () => {
+        fileLineBuffer[currentFile] = linebuffer;
+        linebuffer = consoleLineBuffer;
         currentFile = -1;
       },
 
@@ -305,6 +317,7 @@ export function createImports(runner: Runner): Object {
       },
 
       $reset: (fileId: number) => {
+        fileLineBuffer[fileId] = "";
         sendFileCommand("resetFile", {fileId});
       },
 
@@ -398,6 +411,21 @@ export function createImports(runner: Runner): Object {
       $readkey: (): number => {
         return waitFor("readkey");
       },
+    },
+
+    debug: {
+      $int: (mark: number, n: number) => {
+        console.log("debug int", mark, n);
+      },
+
+      $float: (mark: number, n: number) => {
+        console.log("debug float", mark, n);
+      },
+
+      $str: (mark: number, addr: number) => {
+        const str = getString(addr);
+        console.log("debug str", mark, str.length, str);
+      }
     }
   };
 

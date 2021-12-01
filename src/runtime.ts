@@ -666,6 +666,7 @@ export namespace Runtime {
   export function initLibrary() {
     library["rtl"] = rtl();
     library["crt"] = crt();
+    library["debug"] = debug();
   }
 
   export function hasLibrary(libname: string): boolean {
@@ -734,6 +735,11 @@ const importFunctions: {[key: string]: [number, number]} = {
   "crt.$wherex": [binaryen.none, binaryen.i32],
   "crt.$wherey": [binaryen.none, binaryen.i32],
   "crt.$readkey": [binaryen.none, binaryen.i32],
+
+  /* debug */
+  "debug.$int": [params(binaryen.i32, binaryen.i32), binaryen.none],
+  "debug.$float": [params(binaryen.i32, binaryen.f64), binaryen.none],
+  "debug.$str": [params(binaryen.i32, binaryen.i32), binaryen.none],
 };
 
 function rtl(): Runtime.Library {
@@ -798,6 +804,16 @@ function crt(): Runtime.Library {
   };
 }
 
+function debug(): Runtime.Library {
+  return {
+    "debug": [
+      new LibraryFunction("debug.$int", Types.BaseType.Void, [Types.BaseType.Integer, Types.isOrdinal], null),
+      new LibraryFunction("debug.$float", Types.BaseType.Void, [Types.BaseType.Integer, Types.BaseType.Real], null),
+      new LibraryFunction("debug.$str", Types.BaseType.Void, [Types.BaseType.Integer, Types.isString], null),
+    ]
+  }
+}
+
 /* native library implementations */
 
 function lenstr(wasm: binaryen.Module, libfunc: LibraryFunction) {
@@ -845,6 +861,12 @@ function posc(wasm: binaryen.Module, libfunc: LibraryFunction) {
     [binaryen.i32, binaryen.i32, binaryen.i32], wasm.block(outerblock, [
       // last = mem[source];
       setlocal(last, getmem(getlocal(source))),
+
+      // if last == 0: return 0
+      wasm.if(
+        eq(getlocal(last), constant(0)),
+        wasm.return(constant(0))
+      ),
 
       // index = 1;
       setlocal(index, constant(1)),

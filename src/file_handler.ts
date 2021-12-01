@@ -107,14 +107,20 @@ export class FileHandler {
     const maxBufferLength = this.iobuffer.length - 2;
     let readlength = 0;
     let i = 0;
+    let read = 0;
     while(i + file.position < file.length) {
       readlength++;
-      let read = file.buffer[i + file.position];
+      read = file.buffer[i + file.position];
       this.iobuffer[i + 2] = read;
       i++;
 
       if (read === 10) break; // found newline
       if (readlength === maxBufferLength) break;
+    }
+
+    if (read !== 10 && readlength < maxBufferLength) {
+      this.iobuffer[i + 2] = 10;
+      readlength += 1;
     }
 
     file.position += i;
