@@ -304,7 +304,7 @@ export namespace Stmt {
   }
 
   export class Increment extends Stmt {
-    constructor(public target: Expr.Variable, public ascending: boolean) {
+    constructor(public target: Expr.Variable | Expr.Deref, public ascending: boolean) {
       super();
     }
     public accept<T>(visitor: Visitor<T>): T {

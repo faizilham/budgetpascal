@@ -475,6 +475,10 @@ export class Parser {
 
       case TokenTag.IDENTIFIER: result = this.identifierStmt(); break;
 
+      // TODO: properly implement inc & dec as library call with var param
+      case TokenTag.INC: result = this.increment(true); break;
+      case TokenTag.DEC: result = this.increment(false); break;
+
       default:
         throw this.errorAtCurrent("Expect statement");
     }
@@ -1046,6 +1050,27 @@ export class Parser {
     }
 
     throw new UnreachableErr("Unknown assignment target");
+  }
+
+  private increment(ascending: boolean): Stmt {
+    this.advance();
+    this.consume(TokenTag.LEFT_PAREN, "Expect '('.");
+    let start = this.current;
+    let expr = this.expression();
+
+    if (!expr.assignable) {
+      throw this.errorAt(start, "Invalid argument #1. Expect assignable variable, array element or record field.");
+    } else if (!isOrdinal(expr.type)) {
+      throw this.errorAt(start, `Mismatch type at argument 1. Expect ordinal type, got ${getTypeName(expr.type)}`);
+    }
+
+    this.consume(TokenTag.RIGHT_PAREN, "Expect ')'.");
+
+    if (!(expr instanceof Expr.Variable) && !(expr instanceof Expr.Deref)) {
+      throw this.errorAt(start, "Invalid argument #1. Expect assignable variable, array element or record field.");
+    }
+
+    return new Stmt.Increment(expr, ascending);
   }
 
   private removeDeref(expr: Expr): Expr {

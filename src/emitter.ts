@@ -488,8 +488,6 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
   }
 
   visitIncrement(stmt: Stmt.Increment): void {
-    const entry = stmt.target.entry;
-
     const increment = (left: number) => (
       stmt.ascending ?
       this.wasm.i32.add(left, this.wasm.i32.const(1)) :
@@ -497,18 +495,26 @@ export class Emitter implements Expr.Visitor<number>, Stmt.Visitor<void> {
     )
 
     let instr;
-    switch(entry.level) {
-      case VariableLevel.LOCAL: {
-        instr = this.wasm.local.get(entry.index, binaryen.i32)
-        instr = this.wasm.local.set(entry.index, increment(instr));
-        break;
+    if (stmt.target instanceof Expr.Variable) {
+      const entry = stmt.target.entry;
+      switch(entry.level) {
+        case VariableLevel.LOCAL: {
+          instr = this.wasm.local.get(entry.index, binaryen.i32)
+          instr = this.wasm.local.set(entry.index, increment(instr));
+          break;
+        }
+        case VariableLevel.UPPER: {
+          // should be upper but from "global" level variable (i.e. ownerId == 0)
+          instr = this.getVariableValue(entry);
+          instr = this.setVariable(entry, increment(instr));
+          break;
+        }
       }
-      case VariableLevel.UPPER: {
-        // should be upper but from "global" level variable (i.e. ownerId == 0)
-        instr = this.getVariableValue(entry);
-        instr = this.setVariable(entry, increment(instr));
-        break;
-      }
+    } else {
+      const value = increment(stmt.target.accept(this));
+      const address = stmt.target.ptr.accept(this);
+
+      instr = this.setMemory(address, value, stmt.target.type as PascalType);
     }
 
     this.currentBlock.push(instr);
