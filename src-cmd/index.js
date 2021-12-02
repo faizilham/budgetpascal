@@ -43,7 +43,7 @@ function runFile(filename) {
     });
   }
 
-  const iobuffer = new Int32Array(new SharedArrayBuffer(1064));
+  const iobuffer = new Int32Array(new SharedArrayBuffer(4096));
   const wasmModule = new WebAssembly.Module(binary);
 
   const linebuffers = [];

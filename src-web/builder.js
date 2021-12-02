@@ -49,7 +49,7 @@ export function compileCode(code, terminal, cached = true) {
 export function runCode(binary, terminal, files) {
   terminal.writeln("Running...");
 
-  const iobuffer = new Int32Array(new SharedArrayBuffer(1064));
+  const iobuffer = new Int32Array(new SharedArrayBuffer(4096));
   const wasmModule = new WebAssembly.Module(binary);
 
   const worker = new Worker(new URL('runner.js', import.meta.url), {type: "module"});
