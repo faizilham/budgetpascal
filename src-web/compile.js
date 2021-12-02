@@ -17,6 +17,6 @@ self.addEventListener('message', (event) => {
 
 function runCompile(code) {
   sendMessage("log", "Compiling...");
-  const binary = compile(code, logger);
+  const binary = compile(code, logger, false);
   sendMessage("finish", binary);
 }
