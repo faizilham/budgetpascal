@@ -8,6 +8,7 @@ import path from "path";
 
 let debugWasm = false;
 let optimize = true;
+let compileOnly = false;
 
 if (!process.argv[2]){
   console.error("Usage: yarn start [filename]");
@@ -16,12 +17,29 @@ if (!process.argv[2]){
 
 let filename = process.argv[2];
 
-if (process.argv[3] === "--test") {
-  debugWasm = false;
-  optimize = false;
-} else if (process.argv[3] === "--debug") {
-  debugWasm = true;
-  optimize = false;
+const option = process.argv[3];
+
+switch(option) {
+  case "--test": {
+    debugWasm = false;
+    optimize = false;
+    compileOnly = false;
+    break;
+  }
+
+  case "--debug": {
+    debugWasm = true;
+    optimize = false;
+    compileOnly = false;
+    break;
+  }
+
+  case "--compile": {
+    debugWasm = false;
+    optimize = true;
+    compileOnly = true;
+    break;
+  }
 }
 
 runFile(filename);
@@ -36,6 +54,11 @@ function runFile(filename) {
   if (!binary) return;
 
   console.timeEnd(compileTime);
+
+  if (compileOnly){
+    fs.writeFileSync("tmp/compiled.wasm", binary);
+    return;
+  }
 
   if (debugWasm) {
     fs.writeFile("tmp/debug.wasm", binary, (err) => {

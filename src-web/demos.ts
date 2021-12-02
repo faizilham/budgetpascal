@@ -9,7 +9,7 @@ interface DemoConfig {
 const demos: {[key: string]: DemoConfig} = {
   hangman: {
     program: "hangman.pas",
-    binary: "",
+    binary: "hangman.wasm",
     files: ["res/kata.dat", "res/user.dat"],
   }
 };

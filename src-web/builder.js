@@ -10,6 +10,11 @@ export function setCache(code, binary) {
   cache.binary = binary;
 }
 
+export function clearCache() {
+  cache.code = null;
+  cache.binary = null;
+}
+
 export function compileCode(code, terminal, cached = true) {
   if (cached && code === cache.code) {
     return Promise.resolve(cache.binary);

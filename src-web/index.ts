@@ -1,4 +1,4 @@
-import { compileCode, runCode, setCache } from "./builder";
+import { clearCache, compileCode, runCode, setCache } from "./builder";
 
 import "xterm/css/xterm.css";
 
@@ -66,6 +66,8 @@ async function loadDemo(name: string, editor: CodeMirror.Editor, files: Files) {
   files.setFiles(data.files);
   if (data.binary) {
     setCache(data.code, data.binary);
+  } else {
+    clearCache();
   }
 }
 
