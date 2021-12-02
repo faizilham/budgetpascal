@@ -55,7 +55,6 @@ export function runCode(binary, terminal, files) {
   terminal.writeln("Running...");
 
   const iobuffer = new Int32Array(new SharedArrayBuffer(4096));
-  const wasmModule = new WebAssembly.Module(binary);
 
   const worker = new Worker(new URL('runner.js', import.meta.url), {type: "module"});
 
@@ -164,6 +163,6 @@ export function runCode(binary, terminal, files) {
     }
   });
 
-  worker.postMessage({iobuffer, wasmModule});
+  worker.postMessage({iobuffer, binary});
   terminal.focus();
 }

@@ -14,8 +14,9 @@ const runner = {
 
 const importObject = createImports(runner);
 
-function run(iobuffer, wasmModule) {
+function run(iobuffer, binary) {
   runner.iobuffer = iobuffer;
+  const wasmModule = new WebAssembly.Module(binary);
   const instance = new WebAssembly.Instance(wasmModule, importObject);
   runner.instance = instance;
   runner.memory = new Uint8Array(instance.exports.mem.buffer);
@@ -35,5 +36,5 @@ function run(iobuffer, wasmModule) {
 
 self.addEventListener('message', (event) => {
   if (runner.iobuffer) return;
-  run(event.data.iobuffer, event.data.wasmModule);
+  run(event.data.iobuffer, event.data.binary);
 });
