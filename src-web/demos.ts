@@ -7,6 +7,12 @@ interface DemoConfig {
 }
 
 const demos: {[key: string]: DemoConfig} = {
+  default: {
+    program: "",
+    binary: "",
+    files: [],
+  },
+
   hangman: {
     program: "hangman.pas",
     binary: "hangman.wasm",
@@ -42,19 +48,26 @@ export async function fetchDemo(name: string): Promise<DemoData|null> {
 
 
   try {
-    const programFile = await getFile(name, demo.program);
-    const decoder = new TextDecoder();
-    const code = decoder.decode(programFile);
+    let code = "";
+
+    if (demo.program !== "") {
+      const programFile = await getFile(name, demo.program);
+      const decoder = new TextDecoder();
+      code = decoder.decode(programFile);
+    }
 
     let binary = null;
     if (demo.binary !== "") {
       binary = await getFile(name, demo.binary);
     }
 
-    let fileData = await Promise.all(demo.files.map(file => getFile(name, file)));
     const files: FileMap = {};
-    for (let i = 0; i < demo.files.length; i++) {
-      files[demo.files[i]] = fileData[i];
+
+    if (demo.files.length > 0) {
+      let fileData = await Promise.all(demo.files.map(file => getFile(name, file)));
+      for (let i = 0; i < demo.files.length; i++) {
+        files[demo.files[i]] = fileData[i];
+      }
     }
 
     return {code, binary, files};
