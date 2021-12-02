@@ -68,7 +68,7 @@ class WorkspaceStorage {
   constructor() {
     this.db = new Dexie("BudgetPascalWorkspace");
     this.db.version(1).stores({
-      files: "++id, [workspace+filename], content",
+      files: "[workspace+filename], content",
       codes: "&workspace, text, binary",
     });
   }
