@@ -304,10 +304,18 @@ export function createImports(runner: Runner): Object {
       },
 
       $freadmem: (address: number, size: number) => {
-        sendReadByte(size);
+        let base = address;
+        let remaining = size;
+        while (remaining > 0) {
+          let readSize = Math.min(remaining, runner.iobuffer.length - 2);
+          sendReadByte(readSize);
 
-        for (let i = 0; i < size; i++) {
-          runner.memory[address + i] = runner.iobuffer[i + 2];
+          for (let i = 0; i < readSize; i++) {
+            runner.memory[base + i] = runner.iobuffer[i + 2];
+          }
+
+          remaining -= readSize;
+          base += readSize;
         }
       },
 
