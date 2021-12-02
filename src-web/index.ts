@@ -32,7 +32,8 @@ function init() {
   //TODO: proper download button
   const downloadBtn = document.getElementById("btn-download") as HTMLElement;
   downloadBtn.addEventListener("click", () => {
-    const data = files.files["res/user.dat"];
+    const data = files.files.get("res/user.dat");
+    if (!data) return;
     downloadBlob(data, "user.dat");
   });
 

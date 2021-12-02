@@ -1,13 +1,13 @@
 import Dexie from "dexie";
 
-export type FileMap = {[key:string]: Uint8Array};
+export type FileMap = Map<string, Uint8Array>
 
 export class Files {
   files: FileMap;
   storage: WorkspaceStorage;
   workspace: string;
   constructor(initialWorkspace: string) {
-    this.files = {};
+    this.files = new Map();
     this.storage = new WorkspaceStorage();
     this.workspace = initialWorkspace;
   }
@@ -25,32 +25,39 @@ export class Files {
     const workspace = this.workspace;
     this.storage.clearFiles(workspace);
 
-    const fileEntries = Object.entries(files).map(([filename, content]) => (
-      {workspace, filename, content}
-    ));
+    const fileEntries = [];
+    for (let [filename, content] of files.entries()) {
+      fileEntries.push({workspace, filename, content});
+    }
 
     this.storage.putFiles(fileEntries);
   }
 
   async loadFromStorage() {
     const files = await this.storage.getFiles(this.workspace);
-    this.files = {};
+    this.files.clear();
 
     if (!files) return;
 
     for (let file of files) {
-      this.files[file.filename] = file.content;
+      this.files.set(file.filename, file.content);
     }
   }
 
   read(filename: string): Uint8Array | null {
-    return this.files[filename] || null;
+    return this.files.get(filename) || null;
   }
 
   write(filename: string, data: Uint8Array): boolean {
-    this.files[filename] = data;
+    this.files.set(filename, data);
     this.storage.putFile(this.workspace, filename, data);
     return true;
+  }
+
+  delete(filename: string) {
+    if (!this.files.has(filename)) return;
+    this.files.delete(filename);
+    this.storage.deleteFile(this.workspace, filename);
   }
 }
 
@@ -79,6 +86,10 @@ class WorkspaceStorage {
 
   async clearFiles(workspace: string) {
     await this.db.table("files").where({ workspace }).delete();
+  }
+
+  async deleteFile(workspace: string, filename: string) {
+    await this.db.table("files").where({ workspace, filename }).delete();
   }
 
   async putFile(workspace: string, filename: string, content: Uint8Array) {

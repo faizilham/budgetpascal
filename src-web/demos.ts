@@ -61,12 +61,12 @@ export async function fetchDemo(name: string): Promise<DemoData|null> {
       binary = await getFile(name, demo.binary);
     }
 
-    const files: FileMap = {};
+    const files: FileMap = new Map();
 
     if (demo.files.length > 0) {
       let fileData = await Promise.all(demo.files.map(file => getFile(name, file)));
       for (let i = 0; i < demo.files.length; i++) {
-        files[demo.files[i]] = fileData[i];
+        files.set(demo.files[i], fileData[i]);
       }
     }
 
