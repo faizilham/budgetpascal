@@ -68,7 +68,7 @@ export class TerminalUI {
 
     let result = null;
     if (!interrupted) {
-      result = this.readline + "\r\n";
+      result = this.readline + "\n";
     }
 
     this.readlineActive = false;
@@ -172,9 +172,12 @@ export class TerminalUI {
       }
     } else if (ord < 32 || ord === 0x7f) {
       switch (data) {
-        case "\r": // ENTER
+        case "\r": { // ENTER
+          this.moveReadCursor(this.readline.length);
+          this.terminal.write("\r\n");
           this.finishRead(false);
-        break;
+          break;
+        }
 
         case "\x7F": // BACKSPACE
           this.handleErase(true);
@@ -184,12 +187,13 @@ export class TerminalUI {
           this.insertData("    ");
         break;
 
-        case "\x03": // CTRL+C
+        case "\x03": { // CTRL+C
           this.moveReadCursor(this.readline.length);
           this.terminal.write("^C\r\n");
           this.finishRead(true);
-        break;
+          break;
         }
+      }
     } else {
       this.insertData(data);
     }
@@ -253,8 +257,6 @@ export class TerminalUI {
     if (input == null) {
       iobuffer[1] = -1;
     } else {
-      input = input.replace(/\r\n$/, "\n");
-
       const length = input.length;
       iobuffer[1] = length;
 
