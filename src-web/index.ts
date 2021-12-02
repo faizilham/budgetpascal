@@ -17,6 +17,13 @@ function init() {
   const files = new Files();
   initCompileButton(editor, terminal, files);
 
+  //TODO: proper download button
+  const downloadBtn = document.getElementById("btn-download") as HTMLElement;
+  downloadBtn.addEventListener("click", () => {
+    const data = files.files["res/user.dat"];
+    downloadBlob(data, "user.dat");
+  });
+
   loadDemo("hangman", editor, files);
 };
 
@@ -69,6 +76,27 @@ async function loadDemo(name: string, editor: CodeMirror.Editor, files: Files) {
   } else {
     clearCache();
   }
+}
+
+function downloadBlob(data: Uint8Array, filename: string) {
+  const mimetype = "application/octet-strean";
+
+  const blob = new Blob([data], {type: mimetype});
+  const url = URL.createObjectURL(blob);
+
+  downloadURL(url, filename);
+
+  setTimeout(() => {
+    return URL.revokeObjectURL(url);
+  }, 1000);
+}
+
+function downloadURL(url: string, filename: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  a.remove();
 }
 
 init();
