@@ -4,8 +4,8 @@ const sendCommand = (command, data) => {
   self.postMessage({command, data});
 };
 
-const printToTerminal = (value) => {
-  sendCommand("write", {value});
+const workerFinished = (error, exitMessage) => {
+  sendCommand("finish", {error, exitMessage});
 }
 
 const runner = {
@@ -22,14 +22,15 @@ function run(iobuffer, binary) {
   runner.memory = new Uint8Array(instance.exports.mem.buffer);
   try {
     instance.exports.main();
-    printToTerminal("\nProgram finished.\n");
+    workerFinished(false, "\nProgram finished.\n");
   } catch (e) {
     if (e instanceof InterruptRuntime) {
-      printToTerminal("\nProgram interrupted.\n");
+      workerFinished(false, "\nProgram interrupted.\n");
     } else if (e instanceof RuntimeError) {
-      printToTerminal(`\n${e.message}\n`);
+      workerFinished(true, `\n${e.message}\n`);
     } else {
       console.error(e);
+      workerFinished(true, `\nRuntime error.\n`);
     }
   }
 }

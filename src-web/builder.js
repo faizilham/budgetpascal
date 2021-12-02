@@ -67,10 +67,25 @@ export function runCode(binary, terminal, files) {
     Atomics.notify(iobuffer, 0, 1);
   };
 
+  let resolver;
+  const promise = new Promise((resolve) => {
+    resolver = resolve;
+  })
+
   worker.addEventListener('message', (event) => {
     const message = event.data;
 
     switch(message?.command) {
+      case "finish": {
+        const data = message.data;
+          if (data.exitMessage) {
+            terminal.write(data.exitMessage);
+          }
+
+          resolver();
+        break;
+      }
+
       case "write": {
         if (message.data.fileId == null) {
           terminal.write(message.data.value);
@@ -165,4 +180,6 @@ export function runCode(binary, terminal, files) {
 
   worker.postMessage({iobuffer, binary});
   terminal.focus();
+
+  return promise;
 }
