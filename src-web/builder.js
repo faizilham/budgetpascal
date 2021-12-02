@@ -134,14 +134,18 @@ export function runCode(binary, terminal, files) {
       }
 
       case "wherex": {
-        iobuffer[1] = terminal.cursorPos().x;
-        notifyResult(1);
+        terminal.cursorPos().then(pos => {
+          iobuffer[1] = pos.x;
+          notifyResult(1);
+        });
         break;
       }
 
       case "wherey": {
-        iobuffer[1] = terminal.cursorPos().y;
-        notifyResult(1);
+        terminal.cursorPos().then(pos => {
+          iobuffer[1] = pos.y;
+          notifyResult(1);
+        });
         break;
       }
 

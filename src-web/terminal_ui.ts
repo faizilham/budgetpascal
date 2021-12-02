@@ -5,15 +5,16 @@ import {SpecialKeys, PascalSpecialKeys} from "../src/keyboard_map";
 const ESCAPE_KEY = 0x1b;
 
 type ResolveFunc = ((result: string|null) => void);
+enum ReadMode {NONE, LINE, KEY, POS};
 
 export class TerminalUI {
   terminal: Terminal;
   cursorShown: boolean;
-  private readlineActive: boolean;
   private readResolver: ResolveFunc | null;
   private readline: string;
   private readcursor: number;
-  private readkeyActive: boolean;
+
+  private readMode: ReadMode;
 
   constructor(container: HTMLElement) {
     this.terminal = new Terminal({
@@ -23,27 +24,53 @@ export class TerminalUI {
     });
 
     this.cursorShown = false;
-    this.readlineActive = false;
-    this.readkeyActive = false;
 
     this.readResolver = null;
     this.readline = "";
     this.readcursor = 0;
+
+    this.readMode = ReadMode.NONE;
 
     this.terminal.onData((data) => this.handleData(data));
 
     this.terminal.open(container);
   }
 
+  private clearReadMode() {
+    this.readMode = ReadMode.NONE;
+  }
+
+  private handleData(data: string) {
+    switch (this.readMode) {
+      case ReadMode.KEY: return this.handleKey(data);
+      case ReadMode.LINE: return this.handleReadline(data);
+      case ReadMode.POS: return this.handleGetCursorPos(data);
+    }
+  }
+
+  private startGetCursorPos() {
+    this.readMode = ReadMode.POS;
+    this.terminal.write(ansi.cursorGetPosition);
+    return new Promise<string|null>((resolver) => {
+      this.readResolver = resolver;
+    })
+  }
+
+  private handleGetCursorPos(data: string) {
+    this.clearReadMode();
+    (this.readResolver as ResolveFunc)(data);
+  }
+
+
   private startReadkey() {
-    this.readkeyActive = true;
+    this.readMode = ReadMode.KEY;
     return new Promise<string|null>((resolve) => {
       this.readResolver = resolve;
     })
   }
 
   private handleKey(key: string) {
-    this.readkeyActive = false;
+    this.clearReadMode();
 
     if (key === '\r' || key === '\n') {
       this.terminal.write(ansi.cursorDown(1));
@@ -53,8 +80,7 @@ export class TerminalUI {
   }
 
   private startRead() {
-    if (this.readlineActive) return;
-    this.readlineActive = true;
+    this.readMode = ReadMode.LINE;
     this.readline = "";
     this.readcursor = 0;
 
@@ -64,14 +90,12 @@ export class TerminalUI {
   }
 
   private finishRead(interrupted: boolean) {
-    if (!this.readlineActive) return;
-
     let result = null;
     if (!interrupted) {
       result = this.readline + "\n";
     }
 
-    this.readlineActive = false;
+    this.clearReadMode();
 
     (this.readResolver as ResolveFunc)(result);
     this.readResolver = null;
@@ -143,10 +167,7 @@ export class TerminalUI {
     this.refreshReadline(newReadline, moveCursor);
   }
 
-  private handleData(data: string) {
-    if (this.readkeyActive) return this.handleKey(data);
-    if (!this.readlineActive) return;
-
+  private handleReadline(data: string) {
     const ord = data.charCodeAt(0);
 
     if (ord === ESCAPE_KEY) { // handle ansi sequence
@@ -214,9 +235,23 @@ export class TerminalUI {
     this.terminal.write(ansi.cursorTo(x - 1, y - 1));
   }
 
-  cursorPos() {
-    const x = this.terminal.buffer.active.cursorX + 1;
-    const y = this.terminal.buffer.active.cursorY + 1;
+  async cursorPos() {
+    const result = await this.startGetCursorPos();
+    // format: E[y;xR where E = escape char; x, y = position
+
+    let y = 0;
+    let x = 0;
+    if (result) {
+      const pos = result.slice(2, result.length - 1).split(';');
+      y = parseInt(pos[0], 10);
+      x = parseInt(pos[1], 10);
+
+      if (isNaN(x) || isNaN(y)) {
+        y = 0;
+        x = 0;
+      }
+    }
+
     return {x, y};
   }
 
