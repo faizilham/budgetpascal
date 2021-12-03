@@ -15,6 +15,13 @@ const demos: {[key: string]: DemoConfig} = {
     files: [],
   },
 
+  triangle: {
+    displayName: "Pascal's Triangle",
+    program: "triangle.pas",
+    binary: "",
+    files: [],
+  },
+
   hangman: {
     displayName:"Hangman Demo",
     program: "hangman.pas",
