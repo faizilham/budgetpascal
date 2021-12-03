@@ -70,14 +70,25 @@ export function runCode(binary, terminal, files) {
   let resolver;
   const promise = new Promise((resolve) => {
     resolver = resolve;
-  })
+  });
+
+  let finished = false;
+
+  let stopFunction = () => {
+    if (finished) return;
+    finished = true;
+    terminal.write("\nProgram terminated.\n");
+    worker.terminate();
+    resolver();
+  };
 
   worker.addEventListener('message', (event) => {
     const message = event.data;
 
     switch(message?.command) {
       case "finish": {
-        const data = message.data;
+          finished = true;
+          const data = message.data;
           if (data.exitMessage) {
             terminal.write(data.exitMessage);
           }
@@ -181,5 +192,5 @@ export function runCode(binary, terminal, files) {
   worker.postMessage({iobuffer, binary});
   terminal.focus();
 
-  return promise;
+  return [promise, stopFunction];
 }

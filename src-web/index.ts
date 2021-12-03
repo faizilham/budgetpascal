@@ -17,6 +17,7 @@ const DEFAULT_WORKSPACE = "default";
 interface UIState {
   workspace: string;
   running: boolean;
+  compiling: boolean;
   selectedFile: string | null
 }
 
@@ -29,6 +30,7 @@ function init() {
   const state: UIState = {
     workspace: "default",
     running: false,
+    compiling: false,
     selectedFile: null
   };
 
@@ -142,13 +144,21 @@ function resetButton(state: UIState, editor: CodeMirror.Editor, files: Files) {
 function runButton(state: UIState, editor: CodeMirror.Editor, files: Files, terminal: TerminalUI) {
   return Mithril({
     view: function() {
+
+
       return Mithril(
         "button",
         {
-          disabled: state.running,
-          onclick: () => compileAndRun(state, editor, files, terminal)
+          disabled: state.running && state.compiling,
+          onclick: () => {
+            if (!state.running) {
+              compileAndRun(state, editor, files, terminal)
+            } else {
+              stopExecution();
+            }
+          }
         },
-        "▶ Run"
+        state.running && !state.compiling ? "◼️ Stop" : "▶ Run"
       );
     }
   });
@@ -236,18 +246,34 @@ function initFileListMenu(state: UIState, files: Files) {
 
 /* functionalities */
 
+let stopFunction: Function | null = null;
+function stopExecution() {
+  if (!stopFunction) return;
+
+  stopFunction(); // runCode promise will be resolved by stopFunction
+  stopFunction = null;
+}
+
 async function compileAndRun(state: UIState, editor: CodeMirror.Editor, files: Files, terminal: TerminalUI) {
   state.running = true;
+  state.compiling = true;
   const code = editor.getValue();
   terminal.clear();
 
   try {
     const binary = await compileCode(code, terminal);
     files.setCodeEntry(code, binary);
-
+    state.compiling = false;
     if (!binary) return;
-    await runCode(binary, terminal, files);
+
+    Mithril.redraw(); // to update compiling status
+
+    const [promise, stopFunc] = runCode(binary, terminal, files) as [Promise<void>, Function];
+    stopFunction = stopFunc;
+    await promise;
+
   } finally {
+    stopFunction = null;
     state.running = false;
     Mithril.redraw();
   }
