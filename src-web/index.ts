@@ -156,7 +156,7 @@ function initFileList(state: UIState, files: Files) {
   const fileList = {
     view: function() {
       const items = [];
-      for (let filename of files.files.keys()) {
+      for (let filename of files.filemap.keys()) {
         items.push(fileItem(filename))
       }
       return Mithril(".filelist", items);
@@ -168,19 +168,30 @@ function initFileList(state: UIState, files: Files) {
 
 function initFileListMenu(state: UIState, files: Files) {
   const container = document.getElementById("filelist-menu-buttons") as HTMLElement;
+  const fileSelector = document.getElementById("file-selector") as HTMLElement;
+
+  fileSelector.addEventListener("change", async (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    const inputFile = target.files;
+
+    if (!inputFile || !inputFile[0]) return;
+
+    await addFile(state, files, inputFile[0]);
+    target.value = "";
+  });
 
   const addButton = () => {
-    let onclick;
+    let onclick = () => fileSelector.click();
     return Mithril("button", { disabled: state.running, onclick }, "Add");
   };
 
   const renameButton = () => {
-    let onclick;
+    let onclick = () => renameFile(state, files);
     return Mithril("button", { disabled: state.running || !state.selectedFile, onclick }, "Rename");
   };
 
   const deleteButton = () => {
-    let onclick;
+    let onclick = () => deleteFile(state, files);
     return Mithril("button", { disabled: state.running || !state.selectedFile, onclick }, "Delete");
   };
 
@@ -272,10 +283,59 @@ function resetWorkspace(state: UIState, editor: CodeMirror.Editor, files: Files)
   loadDemo(state, editor, files);
 }
 
+async function addFile(state: UIState, files: Files, inputFile: File) {
+  const readPromise = new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => { resolve(reader.result as ArrayBuffer); }
+    reader.onerror = reject;
+
+    reader.readAsArrayBuffer(inputFile);
+  });
+
+  try {
+    const buffer = await readPromise;
+    if (!buffer) return;
+
+    const data = new Uint8Array(buffer);
+    const filename = inputFile.name;
+    files.write(filename, data);
+    state.selectedFile = filename;
+
+    Mithril.redraw();
+
+  } catch (e: any) {
+    console.error(e);
+  }
+}
+
+function renameFile(state: UIState, files: Files) {
+  const oldFilename = state.selectedFile;
+  if (!oldFilename) return;
+  let newFilename = prompt(`New filename for ${oldFilename}:`, oldFilename);
+  if (!newFilename || newFilename === oldFilename) return;
+
+  if (files.filemap.has(newFilename)) {
+    alert(`File "${newFilename}" already exists!`);
+    return;
+  }
+
+  files.rename(oldFilename, newFilename);
+  state.selectedFile = newFilename;
+}
+
+function deleteFile(state: UIState, files: Files) {
+  const filename = state.selectedFile;
+  if (!filename) return;
+
+  if (!confirm(`Delete "${filename}"?`)) return;
+
+  files.delete(filename);
+}
+
 function downloadFile(state: UIState, files: Files) {
   if (!state.selectedFile) return;
 
-  const data = files.files.get(state.selectedFile);
+  const data = files.filemap.get(state.selectedFile);
   if (!data) return;
 
   const path = state.selectedFile.split(/[\/\\]/g);

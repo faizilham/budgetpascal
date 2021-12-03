@@ -3,11 +3,11 @@ import Dexie from "dexie";
 export type FileMap = Map<string, Uint8Array>
 
 export class Files {
-  files: FileMap;
+  filemap: FileMap;
   storage: WorkspaceStorage;
   workspace: string;
   constructor(initialWorkspace: string) {
-    this.files = new Map();
+    this.filemap = new Map();
     this.storage = new WorkspaceStorage();
     this.workspace = initialWorkspace;
   }
@@ -21,7 +21,7 @@ export class Files {
   }
 
   setFiles(files: FileMap) {
-    this.files = files;
+    this.filemap = files;
     const workspace = this.workspace;
     this.storage.clearFiles(workspace);
 
@@ -35,28 +35,37 @@ export class Files {
 
   async loadFromStorage() {
     const files = await this.storage.getFiles(this.workspace);
-    this.files.clear();
+    this.filemap.clear();
 
     if (!files) return;
 
     for (let file of files) {
-      this.files.set(file.filename, file.content);
+      this.filemap.set(file.filename, file.content);
     }
   }
 
+  rename(oldFilename: string, newFilename: string) {
+    if (!this.filemap.has(oldFilename)) return;
+
+    this.filemap.set(newFilename, this.filemap.get(oldFilename) as Uint8Array);
+    this.filemap.delete(oldFilename);
+
+    this.storage.renameFile(this.workspace, oldFilename, newFilename);
+  }
+
   read(filename: string): Uint8Array | null {
-    return this.files.get(filename) || null;
+    return this.filemap.get(filename) || null;
   }
 
   write(filename: string, data: Uint8Array): boolean {
-    this.files.set(filename, data);
+    this.filemap.set(filename, data);
     this.storage.putFile(this.workspace, filename, data);
     return true;
   }
 
   delete(filename: string) {
-    if (!this.files.has(filename)) return;
-    this.files.delete(filename);
+    if (!this.filemap.has(filename)) return;
+    this.filemap.delete(filename);
     this.storage.deleteFile(this.workspace, filename);
   }
 }
@@ -94,6 +103,10 @@ class WorkspaceStorage {
 
   async putFile(workspace: string, filename: string, content: Uint8Array) {
     await this.db.table("files").put({workspace, filename, content});
+  }
+
+  async renameFile(workspace: string, oldFilename: string, newFilename: string) {
+    await this.db.table("files").where({workspace, filename: oldFilename}).modify({filename: newFilename});
   }
 
   async putFiles(entries: FileEntries[]) {
