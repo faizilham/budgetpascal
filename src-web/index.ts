@@ -9,7 +9,7 @@ import "codemirror/mode/pascal/pascal.js";
 import "./style/main.scss"
 import { TerminalUI } from "./terminal_ui";
 import { Files } from "./files";
-import { Demos, fetchDemo } from "./demos";
+import { demoExists, getDemos, fetchDemo } from "./demos";
 import Mithril from "mithril";
 
 const DEFAULT_WORKSPACE = "default";
@@ -26,20 +26,38 @@ function init() {
 
   const files = new Files(DEFAULT_WORKSPACE);
 
-  const states: UIState = {
-    workspace: "hangman",
+  const state: UIState = {
+    workspace: "default",
     running: false,
     selectedFile: null
   };
 
-  initEditorMenu(states, editor, files, terminal);
-  initFileList(states, files);
-  initFileListMenu(states, files);
+  initEditorMenu(state, editor, files, terminal);
+  initFileList(state, files);
+  initFileListMenu(state, files);
 
-  loadWorkspace(states, editor, files);
+  processHashLocation(state, editor, files, terminal, true);
+
+  window.onhashchange = () => processHashLocation(state, editor, files, terminal, false);
 };
 
 /* UIs */
+
+function processHashLocation(state: UIState, editor: CodeMirror.Editor, files: Files, terminal: TerminalUI, firstTime: boolean) {
+  const hash = location.hash;
+  let workspaceName = hash.slice(1);
+
+  if (!demoExists(workspaceName)) {
+    workspaceName = DEFAULT_WORKSPACE;
+  }
+
+  if (state.running) return;
+
+  if (firstTime || workspaceName !== state.workspace) {
+    state.workspace = workspaceName;
+    loadWorkspace(state, editor, files, terminal);
+  }
+}
 
 function createEditor() {
   const container = document.getElementById("editor-container") as HTMLElement;
@@ -83,7 +101,7 @@ function workspaceSelector(state: UIState, editor: CodeMirror.Editor, files: Fil
     view: function() {
 
       const children = [];
-      const demos = Demos();
+      const demos = getDemos();
       for (let [name, entry] of Object.entries(demos)) {
         children.push(Mithril(
           "option",
@@ -101,8 +119,7 @@ function workspaceSelector(state: UIState, editor: CodeMirror.Editor, files: Fil
           value: state.workspace,
           disabled: state.running,
           onchange: (e: any) => {
-            state.workspace = e.target.value;
-            loadWorkspace(state, editor, files);
+            location.hash = "#" + e.target.value;
           }
         },
         children
@@ -226,9 +243,9 @@ async function compileAndRun(state: UIState, editor: CodeMirror.Editor, files: F
 
   try {
     const binary = await compileCode(code, terminal);
-    if (!binary) return;
-
     files.setCodeEntry(code, binary);
+
+    if (!binary) return;
     await runCode(binary, terminal, files);
   } finally {
     state.running = false;
@@ -236,10 +253,11 @@ async function compileAndRun(state: UIState, editor: CodeMirror.Editor, files: F
   }
 }
 
-async function loadWorkspace(state: UIState, editor: CodeMirror.Editor, files: Files) {
+async function loadWorkspace(state: UIState, editor: CodeMirror.Editor, files: Files, terminal: TerminalUI) {
   const workspace = state.workspace;
   files.workspace = workspace;
   state.selectedFile = null;
+  terminal.clear();
 
   const entry = await files.getCodeEntry();
   if (!entry) {

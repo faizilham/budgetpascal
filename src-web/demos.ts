@@ -29,7 +29,7 @@ export interface DemoData {
   files: FileMap
 }
 
-export function Demos() {
+export function getDemos() {
   return demos;
 }
 
@@ -78,4 +78,8 @@ export async function fetchDemo(name: string): Promise<DemoData|null> {
     console.error(e.message);
     return null;
   }
+}
+
+export function demoExists(name: string): boolean {
+  return demos[name] != null;
 }
