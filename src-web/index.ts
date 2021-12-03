@@ -330,6 +330,7 @@ function deleteFile(state: UIState, files: Files) {
   if (!confirm(`Delete "${filename}"?`)) return;
 
   files.delete(filename);
+  state.selectedFile = null;
 }
 
 function downloadFile(state: UIState, files: Files) {
