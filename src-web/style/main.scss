@@ -1,24 +1,97 @@
+$xterm-viewport-width: 657px;
+
 body {
   background-color: #444;
+  color: white;
+  font-family: sans-serif;
+  font-size: 11pt;
+}
+
+.title {
+  color: #444;
+  background-color: white;
+  font-weight: bold;
+  padding: .25em .75em .25em .75em;
+  margin-right: 1em;
+}
+
+.outer-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
 }
 
 .panel-container {
-  display: inline-block;
-  vertical-align: top;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 #editor-container {
-  width:40%;
-  height:98%;
+  width:100%;
+  height: 95%;
 
   .CodeMirror {
     height: 100%;
+    width: 100%;
     font-family: 'Consolas', monospace;
     font-size: 11pt;
   }
 }
 
+.menu {
+  height: 1.75em;
+  flex: none;
+}
+
+.code-panel {
+  min-width: 0;
+  flex: 1;
+}
+
 .term-panel {
-  width: 58%;
-  height: 98%;
+  padding-left: 10px;
+  flex: 0 0 $xterm-viewport-width + 10px;
+}
+
+#xterm-container {
+  margin-bottom: .25em;
+}
+
+
+.filelist-menu {
+  padding-top: 0.2em;
+}
+
+.filelist-title {
+  margin-right: 1em;
+}
+
+.filelist-container {
+  min-height: 3em;
+  max-height: 40%;
+  flex: 1;
+}
+
+.filelist {
+  overflow-y: scroll;
+  overflow-x: hidden;
+  height: 100%;
+  background-color:#222;
+  width: 98%;
+
+  .fileitem {
+    padding: 0.2em
+
+  }
+
+  .fileitem:hover {
+    background-color: #666;
+    cursor: pointer;
+  }
+
+  .fileitem-selected{
+    background-color: #666;
+  }
+
 }

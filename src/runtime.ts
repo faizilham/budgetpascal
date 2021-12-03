@@ -52,7 +52,7 @@ export class RuntimeBuilder {
   }
 
   buildImports() {
-    for (let func of this.importsUsed) { // TODO: honestly, not needed. it will be optimized anyway
+    for (let func of this.importsUsed) {
       const [paramType, returnType] = importFunctions[func];
       const [modName, baseName] = func.split('.');
       this.wasm.addFunctionImport(func, modName, baseName, paramType, returnType);

@@ -5,13 +5,37 @@
   </head>
   <body>
     <div class="outer-container">
-      <div class="panel-container" id="editor-container"></div>
-      <div class="panel-container term-panel">
-        <div id="xterm-container"></div>
+      <div class="panel-container code-panel">
         <div class="menu">
-          <button id="btn-run">Run</button>
-          <button id="btn-download">Download</button>
-          <button id="btn-reset">Reset Workspace</button>
+          <span class="title">Budget Pascal</span>
+          <span>Workspace:</span>
+          <select>
+            <option>Default</option>
+            <option>Hangman Demo</option>
+          </select>
+          <button id="btn-reset">↩ Reset</button>
+          <button id="btn-run">▶ Run</button>
+        </div>
+        <div id="editor-container"></div>
+      </div>
+      <div class="panel-container term-panel">
+        <div class="menu">
+          <span>Console</span>
+        </div>
+        <div id="xterm-container"></div>
+        <div class="menu filelist-menu">
+          <span class="filelist-title">Input/Output Files</span>
+          <button>Add</button>
+          <button>Rename</button>
+          <button>Delete</button>
+          <button id="btn-download">Save to Disk</button>
+        </div>
+        <div class="filelist-container">
+          <div class="filelist">
+            <div class="fileitem">kata.dat</div>
+            <div class="fileitem">other.dat</div>
+            <div class="fileitem fileitem-selected">user.dat</div>
+          </div>
         </div>
       </div>
     </div>
