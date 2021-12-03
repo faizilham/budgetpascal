@@ -661,27 +661,40 @@ type BuilderFunc = (wasm: binaryen.Module, libfunc: LibraryFunction) => void;
 
 export namespace Runtime {
   export type Library = {[key: string]: LibraryFunction[]};
-  let library: {[key: string]: Library} = {}
 
-  export function initLibrary() {
-    library["rtl"] = rtl();
-    library["crt"] = crt();
-    library["debug"] = debug();
-  }
+  export class Libraries {
+    private library: {[key: string]: Library}
+    private uses: string[];
+    constructor() {
+      this.library = {
+        rtl: rtl(),
+        crt: crt(),
+        debug: debug()
+      };
 
-  export function hasLibrary(libname: string): boolean {
-    return library[libname] != null;
-  }
-
-  export function findLibraryFunctions(libnames: Set<string>, funcName: string): LibraryFunction[] | null {
-    for (let libname of libnames) {
-      const lib = library[libname];
-      if (!lib) continue;
-
-      if (lib[funcName]) return lib[funcName];
+      this.uses = [ "rtl" ];
     }
 
-    return null;
+    use(libname: string): boolean {
+      if (!this.has(libname)) return false;
+      this.uses.push(libname);
+      return true;
+    }
+
+    private has(libname: string): boolean {
+      return this.library[libname] != null;
+    }
+
+    find(funcName: string): LibraryFunction[] | null {
+      for (let libname of this.uses) {
+        const lib = this.library[libname];
+        if (!lib) continue;
+
+        if (lib[funcName]) return lib[funcName];
+      }
+
+      return null;
+    }
   }
 }
 
