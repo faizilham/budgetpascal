@@ -227,6 +227,12 @@ export class TerminalUI {
     this.terminal.options.cursorBlink = show;
   }
 
+  stop() {
+    this.showCursor(false);
+    this.clearReadMode();
+    if (this.readResolver) this.readResolver(null);
+  }
+
   clear() {
     this.terminal.write(ansi.clearTerminal);
   }

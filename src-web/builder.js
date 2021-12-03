@@ -77,8 +77,9 @@ export function runCode(binary, terminal, files) {
   let stopFunction = () => {
     if (finished) return;
     finished = true;
-    terminal.write("\nProgram terminated.\n");
     worker.terminate();
+    terminal.write("\nProgram terminated.\n");
+    terminal.stop();
     resolver();
   };
 
