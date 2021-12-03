@@ -9,12 +9,7 @@
         <div class="menu">
           <span class="title">Budget Pascal</span>
           <span>Workspace:</span>
-          <select>
-            <option>Default</option>
-            <option>Hangman Demo</option>
-          </select>
-          <button id="btn-reset">↩ Reset</button>
-          <button id="btn-run">▶ Run</button>
+          <span id="code-menu-buttons"></span>
         </div>
         <div id="editor-container"></div>
       </div>
@@ -25,18 +20,9 @@
         <div id="xterm-container"></div>
         <div class="menu filelist-menu">
           <span class="filelist-title">Input/Output Files</span>
-          <button>Add</button>
-          <button>Rename</button>
-          <button>Delete</button>
-          <button id="btn-download">Save to Disk</button>
+          <span id="filelist-menu-buttons"></span>
         </div>
-        <div class="filelist-container">
-          <div class="filelist">
-            <div class="fileitem">kata.dat</div>
-            <div class="fileitem">other.dat</div>
-            <div class="fileitem fileitem-selected">user.dat</div>
-          </div>
-        </div>
+        <div class="filelist-container"></div>
       </div>
     </div>
     <script type="module" src="index.ts"></script>

@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.check.json",
     "build": "yarn typecheck && parcel build --no-cache --target cmd --no-optimize",
     "build-cmd": "yarn typecheck && rimraf dist/cmd && parcel build --no-cache --target cmd",
-    "start-web": "sh ./tools/copydemo.sh dist/web-live && parcel serve --no-cache --dist-dir dist/web-live --target web --port 1067",
+    "start-web": "sh ./tools/copydemo.sh dist/web-live && parcel serve --no-cache --dist-dir dist/web-live --target web",
     "build-web": "yarn typecheck && rimraf dist/web && sh ./tools/copydemo.sh dist/web && parcel build --no-cache --target web --detailed-report",
     "test": "mocha -r ts-node/register 'src/tests/*.test.ts'",
     "clean": "rimraf dist/cmd",
@@ -47,10 +47,12 @@
   },
   "dependencies": {
     "@types/codemirror": "^5.60.5",
+    "@types/mithril": "^2.0.8",
     "ansi-escapes": "^5.0.0",
     "binaryen": "^102.0.0",
     "codemirror": "^5.63.3",
     "dexie": "^3.2.0",
+    "mithril": "^2.0.4",
     "readline": "^1.3.0",
     "xterm": "^4.15.0"
   }

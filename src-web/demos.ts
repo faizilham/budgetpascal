@@ -1,6 +1,7 @@
 import { FileMap } from "./files";
 
 interface DemoConfig {
+  displayName: string;
   program: string;
   binary: string;
   files: string[];
@@ -8,12 +9,14 @@ interface DemoConfig {
 
 const demos: {[key: string]: DemoConfig} = {
   default: {
+    displayName: "Default",
     program: "",
     binary: "",
     files: [],
   },
 
   hangman: {
+    displayName:"Hangman Demo",
     program: "hangman.pas",
     binary: "hangman.wasm",
     files: ["res/kata.dat", "res/user.dat"],
@@ -26,8 +29,8 @@ export interface DemoData {
   files: FileMap
 }
 
-export function demoNames() {
-  return Object.keys(demos);
+export function Demos() {
+  return demos;
 }
 
 async function getFile(demoName: string, filename: string) {
