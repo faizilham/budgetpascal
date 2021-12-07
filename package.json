@@ -10,7 +10,7 @@
     "build": "yarn typecheck && parcel build --no-cache --target cmd --no-optimize",
     "build-cmd": "yarn typecheck && rimraf dist/cmd && parcel build --no-cache --target cmd",
     "start-web": "sh ./tools/copydemo.sh dist/web-live && parcel serve --no-cache --dist-dir dist/web-live --target web",
-    "build-web": "yarn typecheck && rimraf dist/web && sh ./tools/copydemo.sh dist/web && parcel build --no-cache --target web --detailed-report",
+    "build-web": "yarn typecheck && rimraf dist/web && sh ./tools/copydemo.sh dist/web && parcel build --no-cache --target web --detailed-report --public-url ./",
     "test": "mocha -r ts-node/register 'src/tests/*.test.ts'",
     "clean": "rimraf dist/cmd",
     "clean-live": "rimraf dist/web-live"
