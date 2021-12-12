@@ -1,6 +1,6 @@
 Budget Pascal
 =============
-A compiler for a small subset of Pascal (hence, "budget") to WebAssembly.
+A compiler for a small subset of Pascal (hence, "budget") to WebAssembly. [Demo](https://faizilham.github.io/lab/budget-pascal/).
 
 ### Why Pascal?
 When I was reorganizing my files, I found a [hangman game](demos/hangman/hangman.pas) that my friends and I wrote 10 years ago for a programming class project.
