@@ -66,6 +66,6 @@ Notable language constructs that didn't get included (non-exhaustive):
 - Most procedure and functions in the standard library
 
 Other limitation and details:
-- Array and record memory arrangement are packed and not aligned to powers of 2, so it might affect performance and processing binary files of array / record types might be incompatible with other compilers.
+- Record field memory arrangement are packed and not aligned to powers of 2, so it might affect performance and processing binary files of record types might be incompatible with other compilers.
 - Call stack is limited to 256
 - Total memory is limited to 4 MB
