@@ -23,7 +23,7 @@ function runCompiler(filename: string, inputfile?: string) {
     });
 
     childproc.on('close', () => {
-      let lines = ''.concat(...outputs).trimRight().split("\n");
+      let lines = ''.concat(...outputs).trimEnd().split("\n");
       lines.shift(); // remove the "Compiled in ..."
       resolve(lines);
     });
@@ -44,7 +44,7 @@ async function runTest(testname: string, hasInput = false){
   expect(results.length).to.eq(output.length);
 
   for (let i = 0; i < output.length; i++) {
-    const line = results[i].trimRight();
+    const line = results[i].trimEnd();
 
     const errMessage = `Mismatched ouput at line ${i+1}, expect ${output[i]}, got ${line}.`;
     expect(line).to.eq(output[i], errMessage);

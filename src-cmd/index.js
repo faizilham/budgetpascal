@@ -11,9 +11,11 @@ let optimize = true;
 let compileOnly = false;
 
 if (!process.argv[2]){
-  console.error("Usage: yarn start [filename]");
+  console.error("Usage: npm start [filename]");
   process.exit(1);
 }
+
+const dirname = path.dirname(process.argv[1])
 
 let filename = process.argv[2];
 
@@ -131,7 +133,7 @@ function runFile(filename) {
     Atomics.notify(iobuffer, 0, 1);
   }
 
-  process.chdir(__dirname);
+  process.chdir(dirname);
   const worker = new Worker("./runner.js", {workerData: {iobuffer, wasmModule}});
   worker.on("message", (message) => {
     switch(message?.command) {

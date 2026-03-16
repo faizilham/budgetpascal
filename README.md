@@ -11,10 +11,10 @@ I want something that can run on the web for easy demo, and compiling pascal to 
 
 Building & Running
 ------------------
-1. Make sure to have node and yarn installed
-2. Run `yarn install` to install all dependencies
-3. Run `yarn build` to build the CLI, or `yarn build-web` for the web version.
-4. To use the CLI, run `yarn start [pascal filename]`. To use the web UI, just serve directory `dist/web` using [serve](https://github.com/vercel/serve) or other http server.
+1. Make sure to have node installed
+2. Run `npm install` to install all dependencies
+3. Run `npm run build` to build the CLI, or `npm run build-web` for the web version.
+4. To use the CLI, run `npm run start [pascal filename]`. To use the web UI, just serve directory `dist/web` using [serve](https://github.com/vercel/serve) or other http server.
 
 Which Subset of Pascal?
 -----------------------
